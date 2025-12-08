@@ -1,0 +1,3 @@
+public enum GameState {
+    MENU, INFO, STATS, LEVEL_SELECT, PLAYING, GAME_OVER, WIN, SHOP, SETTINGS
+}
