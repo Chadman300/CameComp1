@@ -1,7 +1,9 @@
 import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.swing.*;
 
 public class Game extends JPanel implements Runnable {
@@ -22,6 +24,8 @@ public class Game extends JPanel implements Runnable {
     private boolean running;
     private GameState gameState;
     private int selectedStatItem;
+    private int selectedMenuItem; // For main menu navigation
+    private double levelSelectScroll; // Scroll offset for level select
     
     // Core systems
     private GameData gameData;
@@ -35,6 +39,13 @@ public class Game extends JPanel implements Runnable {
     private List<Bullet> bulletPool; // Pool for recycling bullets
     private List<Particle> particles;
     private List<BeamAttack> beamAttacks;
+    
+    // Spatial grid for bullet collision optimization
+    private static final int GRID_CELL_SIZE = 50;
+    private Map<Integer, List<Bullet>> bulletGrid;
+    
+    // Player trail effect
+    private int trailSpawnTimer;
     
     // Input
     private boolean[] keys;
@@ -85,6 +96,7 @@ public class Game extends JPanel implements Runnable {
         bulletPool = new ArrayList<>();
         particles = new ArrayList<>();
         beamAttacks = new ArrayList<>();
+        bulletGrid = new HashMap<>();
         gameData = new GameData();
         shopManager = new ShopManager(gameData);
         renderer = new Renderer(gameData, shopManager);
@@ -92,10 +104,12 @@ public class Game extends JPanel implements Runnable {
         // Initial state
         gameState = GameState.MENU;
         selectedStatItem = 0;
+        selectedMenuItem = 0;
         selectedSettingsItem = 0;
         gradientTime = 0;
         screenShakeX = 0;
         screenShakeY = 0;
+        trailSpawnTimer = 0;
         screenShakeIntensity = 0;
         dodgeCombo = 0;
         comboTimer = 0;
@@ -126,11 +140,24 @@ public class Game extends JPanel implements Runnable {
         
         switch (gameState) {
             case MENU:
-                if (key == KeyEvent.VK_SPACE) gameState = GameState.LEVEL_SELECT;
-                else if (key == KeyEvent.VK_I) gameState = GameState.INFO;
-                else if (key == KeyEvent.VK_S) gameState = GameState.STATS;
-                else if (key == KeyEvent.VK_O) gameState = GameState.SETTINGS; // O for Options/Settings
-                else if (key == KeyEvent.VK_P) gameState = GameState.SHOP; // P for Shop
+                if (key == KeyEvent.VK_UP || key == KeyEvent.VK_W) {
+                    selectedMenuItem = Math.max(0, selectedMenuItem - 1);
+                    screenShakeIntensity = 2;
+                }
+                else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_S) {
+                    selectedMenuItem = Math.min(4, selectedMenuItem + 1);
+                    screenShakeIntensity = 2;
+                }
+                else if (key == KeyEvent.VK_SPACE || key == KeyEvent.VK_ENTER) {
+                    screenShakeIntensity = 5;
+                    switch (selectedMenuItem) {
+                        case 0: gameState = GameState.LEVEL_SELECT; break;
+                        case 1: gameState = GameState.INFO; break;
+                        case 2: gameState = GameState.STATS; break;
+                        case 3: gameState = GameState.SHOP; break;
+                        case 4: gameState = GameState.SETTINGS; break;
+                    }
+                }
                 else if (key == KeyEvent.VK_ESCAPE) {
                     // Double-tap escape to quit
                     if (escapeTimer > 0) {
@@ -139,26 +166,32 @@ public class Game extends JPanel implements Runnable {
                     } else {
                         // First press - start timer
                         escapeTimer = ESCAPE_TIMEOUT;
+                        screenShakeIntensity = 3;
                     }
                 }
+                // Legacy hotkeys still work
+                else if (key == KeyEvent.VK_I) { gameState = GameState.INFO; screenShakeIntensity = 5; }
+                else if (key == KeyEvent.VK_P) { gameState = GameState.SHOP; screenShakeIntensity = 5; }
+                else if (key == KeyEvent.VK_O) { gameState = GameState.SETTINGS; screenShakeIntensity = 5; }
                 break;
                 
             case STATS:
-                if (key == KeyEvent.VK_UP || key == KeyEvent.VK_W) selectedStatItem = Math.max(0, selectedStatItem - 1);
-                else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_S) selectedStatItem = Math.min(3, selectedStatItem + 1);
-                else if (key == KeyEvent.VK_LEFT || key == KeyEvent.VK_A) gameData.adjustUpgrade(selectedStatItem, -1);
-                else if (key == KeyEvent.VK_RIGHT || key == KeyEvent.VK_D) gameData.adjustUpgrade(selectedStatItem, 1);
-                else if (key == KeyEvent.VK_ESCAPE) gameState = GameState.MENU;
+                if (key == KeyEvent.VK_UP || key == KeyEvent.VK_W) { selectedStatItem = Math.max(0, selectedStatItem - 1); screenShakeIntensity = 1; }
+                else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_S) { selectedStatItem = Math.min(3, selectedStatItem + 1); screenShakeIntensity = 1; }
+                else if (key == KeyEvent.VK_LEFT || key == KeyEvent.VK_A) { gameData.adjustUpgrade(selectedStatItem, -1); screenShakeIntensity = 2; }
+                else if (key == KeyEvent.VK_RIGHT || key == KeyEvent.VK_D) { gameData.adjustUpgrade(selectedStatItem, 1); screenShakeIntensity = 2; }
+                else if (key == KeyEvent.VK_ESCAPE) { gameState = GameState.MENU; screenShakeIntensity = 3; }
                 break;
                 
             case SETTINGS:
-                if (key == KeyEvent.VK_UP || key == KeyEvent.VK_W) selectedSettingsItem = Math.max(0, selectedSettingsItem - 1);
-                else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_S) selectedSettingsItem = Math.min(2, selectedSettingsItem + 1);
+                if (key == KeyEvent.VK_UP || key == KeyEvent.VK_W) { selectedSettingsItem = Math.max(0, selectedSettingsItem - 1); screenShakeIntensity = 1; }
+                else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_S) { selectedSettingsItem = Math.min(2, selectedSettingsItem + 1); screenShakeIntensity = 1; }
                 else if (key == KeyEvent.VK_LEFT || key == KeyEvent.VK_A || key == KeyEvent.VK_RIGHT || key == KeyEvent.VK_D) {
                     toggleSetting(selectedSettingsItem);
+                    screenShakeIntensity = 3;
                 }
-                else if (key == KeyEvent.VK_SPACE) toggleSetting(selectedSettingsItem);
-                else if (key == KeyEvent.VK_ESCAPE) gameState = GameState.MENU;
+                else if (key == KeyEvent.VK_SPACE) { toggleSetting(selectedSettingsItem); screenShakeIntensity = 3; }
+                else if (key == KeyEvent.VK_ESCAPE) { gameState = GameState.MENU; screenShakeIntensity = 3; }
                 break;
                 
             case INFO:
@@ -166,10 +199,12 @@ public class Game extends JPanel implements Runnable {
                 break;
                 
             case LEVEL_SELECT:
-                if (key == KeyEvent.VK_LEFT || key == KeyEvent.VK_A) selectPreviousLevel();
-                else if (key == KeyEvent.VK_RIGHT || key == KeyEvent.VK_D) selectNextLevel();
-                else if (key == KeyEvent.VK_SPACE) startSelectedLevel();
-                else if (key == KeyEvent.VK_ESCAPE) gameState = GameState.MENU;
+                if (key == KeyEvent.VK_LEFT || key == KeyEvent.VK_A) { selectPreviousLevel(); screenShakeIntensity = 2; }
+                else if (key == KeyEvent.VK_RIGHT || key == KeyEvent.VK_D) { selectNextLevel(); screenShakeIntensity = 2; }
+                else if (key == KeyEvent.VK_UP || key == KeyEvent.VK_W) { scrollLevelSelectUp(); screenShakeIntensity = 1; }
+                else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_S) { scrollLevelSelectDown(); screenShakeIntensity = 1; }
+                else if (key == KeyEvent.VK_SPACE) { startSelectedLevel(); screenShakeIntensity = 5; }
+                else if (key == KeyEvent.VK_ESCAPE) { gameState = GameState.MENU; screenShakeIntensity = 3; }
                 break;
                 
             case PLAYING:
@@ -184,18 +219,20 @@ public class Game extends JPanel implements Runnable {
                 break;
                 
             case SHOP:
-                if (key == KeyEvent.VK_UP || key == KeyEvent.VK_W) shopManager.selectPrevious();
-                else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_S) shopManager.selectNext();
+                if (key == KeyEvent.VK_UP || key == KeyEvent.VK_W) { shopManager.selectPrevious(); screenShakeIntensity = 1; }
+                else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_S) { shopManager.selectNext(); screenShakeIntensity = 1; }
                 else if (key == KeyEvent.VK_SPACE) {
                     int selected = shopManager.getSelectedShopItem();
                     if (selected == 0) {
                         // Continue to next level
                         startGame();
+                        screenShakeIntensity = 5;
                     } else {
-                        shopManager.purchaseItem(selected);
+                        boolean purchased = shopManager.purchaseItem(selected);
+                        screenShakeIntensity = purchased ? 4 : 2;
                     }
                 }
-                else if (key == KeyEvent.VK_ESCAPE) startGame();
+                else if (key == KeyEvent.VK_ESCAPE) { startGame(); screenShakeIntensity = 3; }
                 break;
                 
             case GAME_OVER:
@@ -240,6 +277,31 @@ public class Game extends JPanel implements Runnable {
     
     private void selectNextLevel() {
         gameData.setCurrentLevel(Math.min(gameData.getMaxUnlockedLevel(), gameData.getCurrentLevel() + 1));
+        ensureLevelVisible();
+    }
+    
+    private void scrollLevelSelectUp() {
+        levelSelectScroll = Math.max(0, levelSelectScroll - 150);
+    }
+    
+    private void scrollLevelSelectDown() {
+        levelSelectScroll += 150;
+    }
+    
+    private void ensureLevelVisible() {
+        // Auto-scroll to keep selected level visible
+        int level = gameData.getCurrentLevel();
+        int row = (level - 1) / 3; // 3 columns per row
+        int levelY = 200 + row * 150 - (int)levelSelectScroll;
+        
+        // If level is above visible area, scroll up
+        if (levelY < 180) {
+            levelSelectScroll = Math.max(0, 200 + row * 150 - 180);
+        }
+        // If level is below visible area, scroll down
+        else if (levelY > HEIGHT - 200) {
+            levelSelectScroll = 200 + row * 150 - (HEIGHT - 350);
+        }
     }
     
     private void startSelectedLevel() {
@@ -348,6 +410,27 @@ public class Game extends JPanel implements Runnable {
         // Update player with delta time (only if alive)
         if (player != null) {
             player.update(keys, WIDTH, HEIGHT, deltaTime);
+            
+            // Spawn fire trail behind player
+            trailSpawnTimer++;
+            if (trailSpawnTimer >= 2) { // Every 2 frames
+                trailSpawnTimer = 0;
+                // Create rocket/fire trail particles
+                double trailX = player.getX();
+                double trailY = player.getY() + 8; // Behind player sprite
+                for (int i = 0; i < 2; i++) {
+                    particles.add(new Particle(
+                        trailX + (Math.random() - 0.5) * 6,
+                        trailY + (Math.random() - 0.5) * 4,
+                        (Math.random() - 0.5) * 0.5,
+                        0.5 + Math.random() * 1.5, // Downward motion
+                        new Color(255, 150 + (int)(Math.random() * 50), 0), // Orange/red
+                        15 + (int)(Math.random() * 10),
+                        3 + (int)(Math.random() * 3),
+                        Particle.ParticleType.SPARK
+                    ));
+                }
+            }
         }
         
         // Update particles
@@ -365,6 +448,11 @@ public class Game extends JPanel implements Runnable {
                 // Successful hit! Start death animation
                 int winBonus = 1000 + (gameData.getCurrentLevel() * 500) + (dodgeCombo * 100);
                 gameData.addScore(winBonus);
+                
+                // Add money reward based on boss type
+                int moneyReward = currentBoss.getMoneyReward();
+                gameData.addRunMoney(moneyReward);
+                gameData.addTotalMoney(moneyReward);
                 
                 // Start boss death animation
                 bossDeathAnimation = true;
@@ -560,62 +648,69 @@ public class Game extends JPanel implements Runnable {
             if (bullet.isOffScreen(WIDTH, HEIGHT)) {
                 bullets.remove(i);
                 returnBulletToPool(bullet);
-                continue;
             }
-            
-            // Check collision with player (only if player exists)
-            if (player != null && bullet.isActive() && bullet.collidesWith(player)) {
-                // Lucky Dodge chance - phase through bullets
-                int luckyDodgeLevel = gameData.getActiveLuckyDodgeLevel();
-                if (luckyDodgeLevel > 0) {
-                    double dodgeChance = luckyDodgeLevel * 0.05; // 5% per level
-                    if (Math.random() < dodgeChance) {
-                        // Lucky dodge! Trigger flicker animation
-                        player.triggerFlicker();
-                        bullets.remove(i);
-                        returnBulletToPool(bullet);
-                        
-                        // Increment dodge combo
-                        dodgeCombo++;
-                        comboTimer = COMBO_TIMEOUT;
-                        
-                        // Add score based on combo
-                        gameData.addScore(10 * dodgeCombo);
-                        
-                        // Create dodge particles
-                        for (int j = 0; j < 8; j++) {
-                            double angle = Math.PI * 2 * j / 8;
-                            particles.add(new Particle(
-                                player.getX(), player.getY(),
-                                Math.cos(angle) * 2, Math.sin(angle) * 2,
-                                new Color(163, 190, 140), 20, 5,
-                                Particle.ParticleType.DODGE
-                            ));
+        }
+        
+        // Rebuild spatial grid after all bullet updates for optimized collision
+        rebuildBulletGrid();
+        
+        // Check collisions using spatial grid (much faster for many bullets!)
+        if (player != null) {
+            List<Bullet> nearbyBullets = getNearbyBullets(player.getX(), player.getY());
+            for (Bullet bullet : nearbyBullets) {
+                if (bullet.isActive() && bullet.collidesWith(player)) {
+                    // Lucky Dodge chance - phase through bullets
+                    int luckyDodgeLevel = gameData.getActiveLuckyDodgeLevel();
+                    if (luckyDodgeLevel > 0) {
+                        double dodgeChance = luckyDodgeLevel * 0.05; // 5% per level
+                        if (Math.random() < dodgeChance) {
+                            // Lucky dodge! Trigger flicker animation
+                            player.triggerFlicker();
+                            bullets.remove(bullet);
+                            returnBulletToPool(bullet);
+                            
+                            // Increment dodge combo
+                            dodgeCombo++;
+                            comboTimer = COMBO_TIMEOUT;
+                            
+                            // Add score based on combo
+                            gameData.addScore(10 * dodgeCombo);
+                            
+                            // Create dodge particles
+                            for (int j = 0; j < 8; j++) {
+                                double angle = Math.PI * 2 * j / 8;
+                                particles.add(new Particle(
+                                    player.getX(), player.getY(),
+                                    Math.cos(angle) * 2, Math.sin(angle) * 2,
+                                    new Color(163, 190, 140), 20, 5,
+                                    Particle.ParticleType.DODGE
+                                ));
+                            }
+                            
+                            continue;
                         }
-                        
-                        continue;
                     }
+                    
+                    // No dodge - game over
+                    // Create death particles
+                    for (int j = 0; j < 20; j++) {
+                        double angle = Math.random() * Math.PI * 2;
+                        double speed = 1 + Math.random() * 3;
+                        particles.add(new Particle(
+                            player.getX(), player.getY(),
+                            Math.cos(angle) * speed, Math.sin(angle) * speed,
+                            new Color(191, 97, 106), 30, 6,
+                            Particle.ParticleType.SPARK
+                        ));
+                    }
+                    screenShakeIntensity = 10;
+                    gameState = GameState.GAME_OVER;
+                    return;
                 }
-                
-                // No dodge - game over
-                // Create death particles
-                for (int j = 0; j < 20; j++) {
-                    double angle = Math.random() * Math.PI * 2;
-                    double speed = 1 + Math.random() * 3;
-                    particles.add(new Particle(
-                        player.getX(), player.getY(),
-                        Math.cos(angle) * speed, Math.sin(angle) * speed,
-                        new Color(191, 97, 106), 30, 6,
-                        Particle.ParticleType.SPARK
-                    ));
-                }
-                screenShakeIntensity = 10;
-                gameState = GameState.GAME_OVER;
-                return;
             }
         }
     }
-    
+        
     // Bullet pooling methods
     private Bullet getBulletFromPool() {
         if (bulletPool.isEmpty()) {
@@ -630,6 +725,40 @@ public class Game extends JPanel implements Runnable {
         }
     }
     
+    // Spatial grid methods for optimized collision detection
+    private int getGridKey(double x, double y) {
+        int gridX = (int)(x / GRID_CELL_SIZE);
+        int gridY = (int)(y / GRID_CELL_SIZE);
+        return gridX * 10000 + gridY; // Simple hash
+    }
+    
+    private void rebuildBulletGrid() {
+        bulletGrid.clear();
+        for (Bullet bullet : bullets) {
+            if (bullet.isActive()) {
+                int key = getGridKey(bullet.getX(), bullet.getY());
+                bulletGrid.computeIfAbsent(key, k -> new ArrayList<>()).add(bullet);
+            }
+        }
+    }
+    
+    private List<Bullet> getNearbyBullets(double x, double y) {
+        List<Bullet> nearby = new ArrayList<>();
+        // Check 3x3 grid around player
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                int checkX = (int)(x / GRID_CELL_SIZE) + dx;
+                int checkY = (int)(y / GRID_CELL_SIZE) + dy;
+                int key = checkX * 10000 + checkY;
+                List<Bullet> cellBullets = bulletGrid.get(key);
+                if (cellBullets != null) {
+                    nearby.addAll(cellBullets);
+                }
+            }
+        }
+        return nearby;
+    }
+    
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -638,7 +767,7 @@ public class Game extends JPanel implements Runnable {
         
         switch (gameState) {
             case MENU:
-                renderer.drawMenu(g2d, WIDTH, HEIGHT, gradientTime, escapeTimer);
+                renderer.drawMenu(g2d, WIDTH, HEIGHT, gradientTime, escapeTimer, selectedMenuItem);
                 break;
             case INFO:
                 renderer.drawInfo(g2d, WIDTH, HEIGHT, gradientTime);
@@ -651,7 +780,7 @@ public class Game extends JPanel implements Runnable {
                 renderer.drawSettings(g2d, WIDTH, HEIGHT, selectedSettingsItem, gradientTime);
                 break;
             case LEVEL_SELECT:
-                renderer.drawLevelSelect(g2d, WIDTH, HEIGHT, gameData.getCurrentLevel(), gameData.getMaxUnlockedLevel(), gradientTime);
+                renderer.drawLevelSelect(g2d, WIDTH, HEIGHT, gameData.getCurrentLevel(), gameData.getMaxUnlockedLevel(), gradientTime, levelSelectScroll);
                 break;
             case PLAYING:
                 // Apply screen shake

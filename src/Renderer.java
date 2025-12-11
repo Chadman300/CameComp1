@@ -5,12 +5,46 @@ public class Renderer {
     private GameData gameData;
     private ShopManager shopManager;
     
+    // Menu buttons
+    private UIButton[] menuButtons;
+    private UIButton[] shopButtons;
+    private UIButton[] statsButtons;
+    private UIButton[] settingsButtons;
+    
     public Renderer(GameData gameData, ShopManager shopManager) {
         this.gameData = gameData;
         this.shopManager = shopManager;
+        
+        // Initialize menu buttons (positions will be updated in drawMenu)
+        menuButtons = new UIButton[5];
+        menuButtons[0] = new UIButton("Select Level", 0, 0, 300, 50, new Color(143, 188, 187), new Color(163, 190, 140));
+        menuButtons[1] = new UIButton("Game Info", 0, 0, 300, 50, new Color(136, 192, 208), new Color(163, 190, 140));
+        menuButtons[2] = new UIButton("Stats & Loadout", 0, 0, 300, 50, new Color(180, 142, 173), new Color(163, 190, 140));
+        menuButtons[3] = new UIButton("Shop", 0, 0, 300, 50, new Color(235, 203, 139), new Color(163, 190, 140));
+        menuButtons[4] = new UIButton("Settings", 0, 0, 300, 50, new Color(191, 97, 106), new Color(163, 190, 140));
+        
+        // Initialize shop buttons (7 items)
+        shopButtons = new UIButton[7];
+        for (int i = 0; i < 7; i++) {
+            shopButtons[i] = new UIButton("", 0, 0, 800, 50, new Color(76, 86, 106), new Color(180, 142, 173));
+        }
+        
+        // Initialize stats buttons (4 upgrades)
+        statsButtons = new UIButton[4];
+        String[] statNames = {"Speed Boost", "Bullet Slow", "Lucky Dodge", "Attack Window+"};
+        Color[] statColors = {new Color(143, 188, 187), new Color(136, 192, 208), new Color(180, 142, 173), new Color(235, 203, 139)};
+        for (int i = 0; i < 4; i++) {
+            statsButtons[i] = new UIButton(statNames[i], 0, 0, 840, 70, new Color(59, 66, 82), statColors[i]);
+        }
+        
+        // Initialize settings buttons (3 options)
+        settingsButtons = new UIButton[3];
+        for (int i = 0; i < 3; i++) {
+            settingsButtons[i] = new UIButton("", 0, 0, 700, 80, new Color(76, 86, 106), new Color(235, 203, 139));
+        }
     }
     
-    public void drawMenu(Graphics2D g, int width, int height, double time, int escapeTimer) {
+    public void drawMenu(Graphics2D g, int width, int height, double time, int escapeTimer, int selectedMenuItem) {
         // Draw animated gradient background with palette colors
         drawAnimatedGradient(g, width, height, time, new Color[]{new Color(46, 52, 64), new Color(59, 66, 82), new Color(76, 86, 106)});
         
@@ -42,34 +76,30 @@ public class Renderer {
         g.drawString(title, titleX + 2 + shineOffset / 10, titleY - 2);
         g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
         
-        g.setFont(new Font("Arial", Font.PLAIN, 20));
-        String[] instructions = {
-            "Rules:",
-            "- You have 1 HP (One hit = death)",
-            "- Boss has 1 HP (One hit = win)",
-            "- Move: WASD or Arrow Keys",
-            "",
-            "Press SPACE to Select Level",
-            "Press I for Info",
-            "Press S for Stats & Loadout",
-            "Press P for Shop",
-            "Press O for Settings",
-            escapeTimer > 0 ? "Press ESC again to Quit" : "Press ESC to Quit"
-        };
-        
-        int y = 250;
-        for (String line : instructions) {
-            fm = g.getFontMetrics();
-            g.drawString(line, (width - fm.stringWidth(line)) / 2, y);
-            y += 35;
+        // Draw buttons
+        int buttonY = 280;
+        int buttonSpacing = 70;
+        for (int i = 0; i < menuButtons.length; i++) {
+            menuButtons[i].setPosition((width - 300) / 2, buttonY + i * buttonSpacing);
+            menuButtons[i].update(i == selectedMenuItem, time);
+            menuButtons[i].draw(g, time);
         }
         
         // Show money
-        g.setColor(Color.GREEN);
+        g.setColor(new Color(163, 190, 140)); // Palette green
         g.setFont(new Font("Arial", Font.BOLD, 32));
         String money = "Money: $" + gameData.getTotalMoney();
         fm = g.getFontMetrics();
-        g.drawString(money, (width - fm.stringWidth(money)) / 2, height - 100);
+        g.drawString(money, (width - fm.stringWidth(money)) / 2, height - 150);
+        
+        // Quit hint
+        if (escapeTimer > 0) {
+            g.setColor(new Color(191, 97, 106)); // Palette red
+            g.setFont(new Font("Arial", Font.BOLD, 24));
+            String quitText = "Press ESC again to Quit";
+            fm = g.getFontMetrics();
+            g.drawString(quitText, (width - fm.stringWidth(quitText)) / 2, height - 80);
+        }
     }
     
     public void drawInfo(Graphics2D g, int width, int height, double time) {
@@ -82,36 +112,59 @@ public class Renderer {
         FontMetrics fm = g.getFontMetrics();
         g.drawString(title, (width - fm.stringWidth(title)) / 2, 60);
         
-        // Boss types section
-        g.setColor(new Color(235, 203, 139)); // Palette yellow
+        // Game Rules section
+        g.setColor(new Color(143, 188, 187)); // Palette teal
         g.setFont(new Font("Arial", Font.BOLD, 28));
-        g.drawString("BOSS TYPES (Geometric Shapes):", 50, 120);
+        g.drawString("CORE RULES:", 70, 120);
         
         g.setColor(Color.WHITE);
-        g.setFont(new Font("Arial", Font.PLAIN, 16));
+        g.setFont(new Font("Arial", Font.PLAIN, 18));
+        String[] rules = {
+            "• You have 1 HP - One hit = Game Over",
+            "• Boss has 1 HP - One hit during attack window = Victory",
+            "• Move with WASD or Arrow Keys",
+            "• Attack window opens periodically - look for the yellow ring!",
+            "• Beam attacks spawn at higher levels with WARNING indicators"
+        };
+        
+        int y = 155;
+        for (String line : rules) {
+            g.drawString(line, 90, y);
+            y += 30;
+        }
+        
+        // Boss types section
+        y += 20;
+        g.setColor(new Color(235, 203, 139)); // Palette yellow
+        g.setFont(new Font("Arial", Font.BOLD, 28));
+        g.drawString("BOSS TYPES:", 70, y);
+        y += 35;
+        
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Arial", Font.PLAIN, 18));
         String[] bossInfo = {
             "Level 1-3: Triangle, Square, Pentagon - Basic patterns",
             "Level 4-6: Hexagon, Heptagon, Octagon - Mixed attacks",
             "Level 7-9: Nonagon, Decagon, 11-gon - Advanced patterns",
-            "Level 10+: 12+ sided polygons - All attack types",
+            "Level 10+: 12+ sided polygons - All attack types + Beams",
             "",
-            "Each boss gains 1 side per level and uses more complex patterns!"
+            "Each boss gains 1 side per level with increasingly complex patterns!"
         };
         
-        int y = 155;
         for (String line : bossInfo) {
-            g.drawString(line, 70, y);
-            y += 25;
+            g.drawString(line, 90, y);
+            y += 28;
         }
         
         // Projectile types section
+        y += 20;
         g.setColor(new Color(136, 192, 208)); // Palette cyan
         g.setFont(new Font("Arial", Font.BOLD, 28));
-        g.drawString("PROJECTILE TYPES:", 50, y + 20);
-        y += 55;
+        g.drawString("PROJECTILE TYPES:", 70, y);
+        y += 35;
         
         g.setColor(Color.WHITE);
-        g.setFont(new Font("Arial", Font.PLAIN, 16));
+        g.setFont(new Font("Arial", Font.PLAIN, 18));
         String[] projectileInfo = {
             "1. NORMAL - Standard red bullets",
             "2. FAST - Orange bullets with higher speed",
@@ -120,20 +173,21 @@ public class Renderer {
             "5. BOUNCING - Green bullets that bounce off walls",
             "6. SPIRAL - Pink bullets that rotate as they move",
             "7. SPLITTING - Yellow bullets that split into 3",
-            "8. ACCELERATING - Cyan bullets that speed up over time",
-            "9. WAVE - Magenta bullets that move in wave patterns",
+            "8. ACCELERATING - Cyan bullets that speed up",
+            "9. WAVE - Magenta bullets moving in wave patterns",
             "",
-            "All projectiles (except NORMAL) have 45-frame warning indicators!"
+            "All special projectiles show 45-frame warning indicators!"
         };
         
         for (String line : projectileInfo) {
-            g.drawString(line, 70, y);
-            y += 25;
+            g.drawString(line, 90, y);
+            y += 28;
         }
         
-        g.setColor(Color.GRAY);
-        g.setFont(new Font("Arial", Font.PLAIN, 18));
-        g.drawString("Press ESC to return to menu", 50, height - 50);
+        // Controls hint
+        g.setColor(new Color(216, 222, 233));
+        g.setFont(new Font("Arial", Font.PLAIN, 20));
+        g.drawString("Press ESC to return to menu | Press R to restart during gameplay | Press P to visit shop", 70, height - 50);
     }
     
     public void drawStats(Graphics2D g, int width, int height, double time) {
@@ -191,15 +245,10 @@ public class Renderer {
     }
     
     public void drawStatsUpgrades(Graphics2D g, int width, int selectedStatItem) {
-        String[][] upgrades = {
-            {"Speed Boost", "Owned: " + gameData.getSpeedUpgradeLevel(), "Active: " + gameData.getActiveSpeedLevel()},
-            {"Bullet Slow", "Owned: " + gameData.getBulletSlowUpgradeLevel(), "Active: " + gameData.getActiveBulletSlowLevel()},
-            {"Lucky Dodge", "Owned: " + gameData.getLuckyDodgeUpgradeLevel(), "Active: " + gameData.getActiveLuckyDodgeLevel()},
-            {"Attack Window+", "Owned: " + gameData.getAttackWindowUpgradeLevel(), "Active: " + gameData.getActiveAttackWindowLevel()}
-        };
+        String[] upgradeNames = {"Speed Boost", "Bullet Slow", "Lucky Dodge", "Attack Window+"};
         
         int y = 340;
-        for (int i = 0; i < upgrades.length; i++) {
+        for (int i = 0; i < upgradeNames.length; i++) {
             boolean isSelected = i == selectedStatItem;
             int owned = 0;
             int active = 0;
@@ -211,54 +260,44 @@ public class Renderer {
                 case 3: owned = gameData.getAttackWindowUpgradeLevel(); active = gameData.getActiveAttackWindowLevel(); break;
             }
             
-            // Draw selection box
-            if (isSelected) {
-                g.setColor(Color.YELLOW);
-                g.setStroke(new BasicStroke(3));
-                g.drawRect(width / 2 - 420, y - 35, 840, 80);
-            }
-            
-            // Draw upgrade box
-            g.setColor(new Color(40, 40, 40));
-            g.fillRect(width / 2 - 410, y - 30, 820, 70);
-            
-            // Draw upgrade name
-            g.setColor(Color.WHITE);
-            g.setFont(new Font("Arial", Font.BOLD, 26));
-            g.drawString(upgrades[i][0], width / 2 - 390, y);
-            
-            // Draw owned count
-            g.setFont(new Font("Arial", Font.PLAIN, 20));
-            g.setColor(Color.CYAN);
-            g.drawString(upgrades[i][1], width / 2 - 390, y + 28);
+            // Position and draw the main upgrade button
+            statsButtons[i].setPosition((width - 840) / 2, y - 30);
             
             // Draw minus button
-            g.setColor(active > 0 ? Color.ORANGE : Color.GRAY);
-            g.fillRect(width / 2 + 50, y - 20, 40, 40);
-            g.setColor(Color.BLACK);
+            int minusX = width / 2 + 50;
+            g.setColor(active > 0 ? new Color(191, 97, 106) : new Color(80, 80, 80)); // Red when active, gray when disabled
+            g.fillRoundRect(minusX, y - 20, 40, 40, 10, 10);
+            g.setColor(Color.WHITE);
+            g.setStroke(new BasicStroke(2));
+            g.drawRoundRect(minusX, y - 20, 40, 40, 10, 10);
             g.setFont(new Font("Arial", Font.BOLD, 32));
-            g.drawString("-", width / 2 + 63, y + 10);
+            g.drawString("-", minusX + 13, y + 10);
             
-            // Draw progress bar
-            int barWidth = 200;
+            // Draw progress bar background
             int barX = width / 2 + 110;
+            int barWidth = 200;
             
             // Background
             g.setColor(new Color(60, 60, 60));
-            g.fillRect(barX, y - 15, barWidth, 30);
+            g.fillRoundRect(barX, y - 15, barWidth, 30, 8, 8);
             
-            // Filled portion
+            // Filled portion with gradient
             if (owned > 0) {
                 float fillRatio = (float) active / owned;
                 int fillWidth = (int) (barWidth * fillRatio);
-                g.setColor(new Color(163, 190, 140)); // Palette green
-                g.fillRect(barX, y - 15, fillWidth, 30);
+                
+                GradientPaint barGradient = new GradientPaint(
+                    barX, y - 15, new Color(143, 188, 187),
+                    barX + fillWidth, y + 15, new Color(163, 190, 140)
+                );
+                g.setPaint(barGradient);
+                g.fillRoundRect(barX, y - 15, fillWidth, 30, 8, 8);
             }
             
             // Border
-            g.setColor(Color.WHITE);
-            g.setStroke(new BasicStroke(2));
-            g.drawRect(barX, y - 15, barWidth, 30);
+            g.setColor(isSelected ? new Color(235, 203, 139) : Color.WHITE);
+            g.setStroke(new BasicStroke(isSelected ? 3 : 2));
+            g.drawRoundRect(barX, y - 15, barWidth, 30, 8, 8);
             
             // Draw text on bar
             g.setFont(new Font("Arial", Font.BOLD, 18));
@@ -268,36 +307,75 @@ public class Renderer {
             g.drawString(barText, barX + (barWidth - fm.stringWidth(barText)) / 2, y + 5);
             
             // Draw plus button
-            g.setColor(active < owned ? Color.ORANGE : Color.GRAY);
-            g.fillRect(width / 2 + 330, y - 20, 40, 40);
-            g.setColor(Color.BLACK);
+            int plusX = width / 2 + 330;
+            g.setColor(active < owned ? new Color(163, 190, 140) : new Color(80, 80, 80)); // Green when available, gray when maxed
+            g.fillRoundRect(plusX, y - 20, 40, 40, 10, 10);
+            g.setColor(Color.WHITE);
+            g.setStroke(new BasicStroke(2));
+            g.drawRoundRect(plusX, y - 20, 40, 40, 10, 10);
             g.setFont(new Font("Arial", Font.BOLD, 32));
-            g.drawString("+", width / 2 + 341, y + 10);
+            g.drawString("+", plusX + 11, y + 10);
+            
+            // Draw the upgrade name and owned count in a styled box
+            g.setColor(new Color(40, 40, 40));
+            g.fillRoundRect(width / 2 - 410, y - 30, 450, 70, 15, 15);
+            
+            // Selection indicator
+            if (isSelected) {
+                g.setColor(new Color(235, 203, 139));
+                g.setStroke(new BasicStroke(3));
+                g.drawRoundRect(width / 2 - 410, y - 30, 450, 70, 15, 15);
+            } else {
+                g.setColor(new Color(100, 100, 100));
+                g.setStroke(new BasicStroke(1));
+                g.drawRoundRect(width / 2 - 410, y - 30, 450, 70, 15, 15);
+            }
+            
+            // Draw upgrade name
+            g.setColor(Color.WHITE);
+            g.setFont(new Font("Arial", Font.BOLD, 26));
+            g.drawString(upgradeNames[i], width / 2 - 390, y);
+            
+            // Draw owned count
+            g.setFont(new Font("Arial", Font.PLAIN, 20));
+            g.setColor(new Color(136, 192, 208)); // Palette cyan
+            g.drawString("Owned: " + owned, width / 2 - 390, y + 28);
             
             y += 100;
         }
     }
     
-    public void drawLevelSelect(Graphics2D g, int width, int height, int currentLevel, int maxUnlockedLevel, double time) {
+    public void drawLevelSelect(Graphics2D g, int width, int height, int currentLevel, int maxUnlockedLevel, double time, double scrollOffset) {
         // Draw animated Balatro-style gradient
         drawAnimatedGradient(g, width, height, time, new Color[]{new Color(20, 25, 50), new Color(35, 40, 65), new Color(50, 35, 70)});
         
-        g.setColor(Color.WHITE);
-        g.setFont(new Font("Arial", Font.BOLD, 48));
+        // Draw title with glow effect
+        g.setColor(new Color(255, 255, 255, 100));
+        g.setFont(new Font("Arial", Font.BOLD, 52));
         String title = "SELECT LEVEL";
         FontMetrics fm = g.getFontMetrics();
+        g.drawString(title, (width - fm.stringWidth(title)) / 2 + 2, 82);
+        
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Arial", Font.BOLD, 48));
         g.drawString(title, (width - fm.stringWidth(title)) / 2, 80);
         
-        g.setFont(new Font("Arial", Font.PLAIN, 20));
-        String instruction = "Use LEFT/RIGHT to select | SPACE to start | ESC to go back";
+        // Draw instructions with icons
+        g.setFont(new Font("Arial", Font.PLAIN, 18));
+        String instruction = "↑↓ Scroll | ←→ Select | SPACE Start | ESC Back";
         fm = g.getFontMetrics();
-        g.drawString(instruction, (width - fm.stringWidth(instruction)) / 2, 130);
+        g.setColor(new Color(200, 200, 200));
+        g.drawString(instruction, (width - fm.stringWidth(instruction)) / 2, 125);
         
-        // Draw level grid
-        int startY = 200;
-        int levelsPerRow = 5;
-        int boxSize = 80;
-        int spacing = 40;
+        // Create clipping region for scrollable area
+        Shape oldClip = g.getClip();
+        g.setClip(0, 160, width, height - 220);
+        
+        // Draw level grid - 3 columns per row
+        int startY = 200 - (int)scrollOffset;
+        int levelsPerRow = 3;
+        int boxSize = 100;
+        int spacing = 50;
         
         for (int i = 1; i <= 20; i++) {
             int row = (i - 1) / levelsPerRow;
@@ -305,46 +383,121 @@ public class Renderer {
             int x = width / 2 - (levelsPerRow * (boxSize + spacing)) / 2 + col * (boxSize + spacing);
             int y = startY + row * (boxSize + spacing);
             
+            // Skip if outside visible area
+            if (y < 140 || y > height - 60) continue;
+            
             boolean isUnlocked = i <= maxUnlockedLevel;
             boolean isSelected = i == currentLevel;
+            boolean isMegaBoss = (i % 3 == 0); // Every 3rd level
+            
+            // Draw card shadow
+            g.setColor(new Color(0, 0, 0, 100));
+            g.fillRoundRect(x + 4, y + 4, boxSize, boxSize, 15, 15);
             
             // Draw box with card-style appearance
             if (isSelected) {
-                // Glow effect
-                g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.4f));
+                // Animated glow effect
+                float glowPulse = (float)(0.3 + 0.2 * Math.sin(time * 3));
+                g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, glowPulse));
                 g.setColor(new Color(255, 255, 150));
-                g.setStroke(new BasicStroke(8));
-                g.drawRect(x - 6, y - 6, boxSize + 12, boxSize + 12);
+                g.setStroke(new BasicStroke(10));
+                g.drawRoundRect(x - 8, y - 8, boxSize + 16, boxSize + 16, 20, 20);
                 
                 g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
                 g.setColor(new Color(255, 255, 200));
                 g.setStroke(new BasicStroke(4));
-                g.drawRect(x - 2, y - 2, boxSize + 4, boxSize + 4);
+                g.drawRoundRect(x - 4, y - 4, boxSize + 8, boxSize + 8, 18, 18);
             }
             
+            // Fill color based on type
             if (isUnlocked) {
-                g.setColor(new Color(50, 150, 50));
+                if (isMegaBoss) {
+                    // Gradient for mega bosses
+                    GradientPaint gradient = new GradientPaint(
+                        x, y, new Color(150, 50, 150),
+                        x, y + boxSize, new Color(200, 100, 200)
+                    );
+                    g.setPaint(gradient);
+                } else {
+                    // Gradient for mini bosses
+                    GradientPaint gradient = new GradientPaint(
+                        x, y, new Color(40, 120, 60),
+                        x, y + boxSize, new Color(60, 160, 80)
+                    );
+                    g.setPaint(gradient);
+                }
             } else {
-                g.setColor(new Color(100, 100, 100));
+                g.setColor(new Color(60, 60, 60));
             }
-            g.fillRect(x, y, boxSize, boxSize);
+            g.fillRoundRect(x, y, boxSize, boxSize, 15, 15);
             
-            g.setColor(Color.WHITE);
-            g.setStroke(new BasicStroke(2));
-            g.drawRect(x, y, boxSize, boxSize);
+            // Border
+            g.setColor(isSelected ? new Color(255, 255, 255) : new Color(150, 150, 150));
+            g.setStroke(new BasicStroke(isSelected ? 3 : 2));
+            g.drawRoundRect(x, y, boxSize, boxSize, 15, 15);
             
-            // Draw level number
-            g.setFont(new Font("Arial", Font.BOLD, 32));
+            // Draw level number with shadow
+            g.setFont(new Font("Arial", Font.BOLD, 36));
             String levelNum = String.valueOf(i);
-            fm = g.getFontMetrics();
-            g.drawString(levelNum, x + (boxSize - fm.stringWidth(levelNum)) / 2, y + boxSize / 2 + 10);
+            FontMetrics fm2 = g.getFontMetrics();
+            int textX = x + (boxSize - fm2.stringWidth(levelNum)) / 2;
+            int textY = y + boxSize / 2 + 12;
+            
+            // Shadow
+            g.setColor(new Color(0, 0, 0, 150));
+            g.drawString(levelNum, textX + 2, textY + 2);
+            
+            // Main text
+            g.setColor(isUnlocked ? Color.WHITE : new Color(100, 100, 100));
+            g.drawString(levelNum, textX, textY);
+            
+            // Mega boss indicator
+            if (isUnlocked && isMegaBoss) {
+                g.setFont(new Font("Arial", Font.BOLD, 12));
+                g.setColor(new Color(255, 215, 0));
+                String megaText = "MEGA";
+                fm2 = g.getFontMetrics();
+                g.drawString(megaText, x + (boxSize - fm2.stringWidth(megaText)) / 2, y + boxSize - 8);
+            }
             
             // Draw lock icon for locked levels
             if (!isUnlocked) {
-                g.setColor(Color.RED);
-                g.setFont(new Font("Arial", Font.BOLD, 40));
-                //g.drawString("🔒", x + 20, y + 55);
+                g.setFont(new Font("Arial", Font.BOLD, 16));
+                g.setColor(new Color(200, 50, 50));
+                String lockText = "[LOCKED]";
+                fm2 = g.getFontMetrics();
+                g.drawString(lockText, x + (boxSize - fm2.stringWidth(lockText)) / 2, y + 30);
             }
+        }
+        
+        // Restore clip
+        g.setClip(oldClip);
+        
+        // Draw fade overlay at top and bottom
+        GradientPaint topFade = new GradientPaint(0, 160, new Color(20, 25, 50, 200), 0, 220, new Color(20, 25, 50, 0));
+        g.setPaint(topFade);
+        g.fillRect(0, 160, width, 60);
+        
+        GradientPaint bottomFade = new GradientPaint(0, height - 120, new Color(20, 25, 50, 0), 0, height - 60, new Color(20, 25, 50, 200));
+        g.setPaint(bottomFade);
+        g.fillRect(0, height - 120, width, 60);
+        
+        // Draw scroll indicators
+        if (scrollOffset > 0) {
+            // Up arrow
+            g.setColor(new Color(255, 255, 255, 150));
+            g.setFont(new Font("Arial", Font.BOLD, 30));
+            g.drawString("▲", width / 2 - 10, 180);
+        }
+        
+        int maxLevels = 20;
+        int totalRows = (maxLevels + 2) / 3;
+        int maxScroll = Math.max(0, startY + totalRows * 150 - height + 200);
+        if (scrollOffset < maxScroll) {
+            // Down arrow
+            g.setColor(new Color(255, 255, 255, 150));
+            g.setFont(new Font("Arial", Font.BOLD, 30));
+            g.drawString("▼", width / 2 - 10, height - 40);
         }
     }
     
@@ -417,6 +570,72 @@ public class Renderer {
             bullet.draw(g);
         }
         
+        // Draw boss health bar at bottom
+        if (boss != null) {
+            int barWidth = 600;
+            int barHeight = 40;
+            int barX = (width - barWidth) / 2;
+            int barY = height - 110;
+            
+            // Boss name and type
+            String bossName = boss.getVehicleName();
+            String bossType = boss.isMegaBoss() ? "[MEGA BOSS]" : "[MINI BOSS]";
+            
+            // Background panel with shadow
+            g.setColor(new Color(0, 0, 0, 100));
+            g.fillRoundRect(barX + 3, barY + 3, barWidth, barHeight + 45, 15, 15);
+            g.setColor(new Color(20, 20, 30, 200));
+            g.fillRoundRect(barX, barY, barWidth, barHeight + 45, 15, 15);
+            
+            // Boss type label
+            g.setFont(new Font("Arial", Font.BOLD, 14));
+            FontMetrics fm = g.getFontMetrics();
+            Color typeColor = boss.isMegaBoss() ? new Color(255, 50, 50) : new Color(100, 200, 100);
+            g.setColor(typeColor);
+            g.drawString(bossType, barX + 10, barY + 18);
+            
+            // Boss name
+            g.setFont(new Font("Arial", Font.BOLD, 18));
+            fm = g.getFontMetrics();
+            g.setColor(boss.isMegaBoss() ? new Color(255, 215, 0) : Color.WHITE);
+            g.drawString(bossName, barX + 10, barY + 38);
+            
+            // Health bar background
+            g.setColor(new Color(60, 60, 60));
+            g.fillRoundRect(barX + 10, barY + 45, barWidth - 20, 15, 8, 8);
+            
+            // Health bar fill (always full - boss has no health system, just vulnerability window)
+            GradientPaint healthGradient;
+            if (boss.isMegaBoss()) {
+                healthGradient = new GradientPaint(
+                    barX + 10, 0, new Color(200, 50, 50),
+                    barX + barWidth - 10, 0, new Color(255, 100, 100)
+                );
+            } else {
+                healthGradient = new GradientPaint(
+                    barX + 10, 0, new Color(50, 150, 50),
+                    barX + barWidth - 10, 0, new Color(100, 200, 100)
+                );
+            }
+            g.setPaint(healthGradient);
+            g.fillRoundRect(barX + 10, barY + 45, barWidth - 20, 15, 8, 8);
+            
+            // Vulnerability indicator
+            if (bossVulnerable) {
+                g.setColor(new Color(255, 255, 100));
+                g.setFont(new Font("Arial", Font.BOLD, 12));
+                String vulnText = "<< VULNERABLE >>";
+                fm = g.getFontMetrics();
+                int vulnX = barX + barWidth - fm.stringWidth(vulnText) - 10;
+                g.drawString(vulnText, vulnX, barY + 18);
+            }
+            
+            // Health bar border
+            g.setColor(new Color(200, 200, 200));
+            g.setStroke(new BasicStroke(2));
+            g.drawRoundRect(barX + 10, barY + 45, barWidth - 20, 15, 8, 8);
+        }
+        
         // Draw UI with better contrast
         g.setColor(new Color(0, 0, 0, 150));
         g.fillRoundRect(10, 10, 280, 90, 10, 10);
@@ -467,54 +686,37 @@ public class Renderer {
         fm = g.getFontMetrics();
         g.drawString(earnings, (width - fm.stringWidth(earnings)) / 2, 180);
         
-        // Shop items
+        // Shop items using buttons
         String[] items = shopManager.getShopItems();
         int y = 250;
         int selectedItem = shopManager.getSelectedShopItem();
         
         for (int i = 0; i < items.length; i++) {
-            boolean isSelected = i == selectedItem;
             int cost = shopManager.getItemCost(i);
             boolean canAfford = gameData.getTotalMoney() >= cost || i == 3 || i == 5;
             
-            // Draw selection highlight with glow
-            if (isSelected) {
-                // Outer glow
-                g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f));
-                g.setColor(new Color(255, 255, 100));
-                g.setStroke(new BasicStroke(8));
-                g.drawRect(width / 2 - 415, y - 40, 830, 70);
-                
-                g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
-                g.setColor(new Color(255, 255, 150));
-                g.setStroke(new BasicStroke(3));
-                g.drawRect(width / 2 - 410, y - 35, 820, 60);
-            }
-            
-            // Draw item box
-            g.setColor(new Color(40, 40, 40));
-            g.fillRect(width / 2 - 400, y - 30, 800, 50);
-            
-            // Draw item text
-            if (canAfford) {
-                g.setColor(Color.WHITE);
-            } else {
-                g.setColor(Color.GRAY);
-            }
-            g.setFont(new Font("Arial", Font.PLAIN, 20));
-            g.drawString(items[i], width / 2 - 380, y);
-            
-            // Draw cost
+            // Build button text with cost
+            String buttonText = items[i];
             if (i != 3 && i != 5) {
-                g.setColor(canAfford ? new Color(163, 190, 140) : new Color(191, 97, 106)); // Palette green or red
-                g.drawString("$" + cost, width / 2 + 320, y);
+                buttonText += "  -  $" + cost;
             }
+            
+            // Update button appearance based on affordability
+            if (!canAfford) {
+                shopButtons[i] = new UIButton(buttonText, 0, 0, 800, 50, new Color(60, 60, 60), new Color(100, 100, 100));
+            } else {
+                shopButtons[i] = new UIButton(buttonText, 0, 0, 800, 50, new Color(76, 86, 106), new Color(180, 142, 173));
+            }
+            
+            shopButtons[i].setPosition((width - 800) / 2, y - 30);
+            shopButtons[i].update(i == selectedItem, time);
+            shopButtons[i].draw(g, time);
             
             y += 80;
         }
         
         // Instructions
-        g.setColor(Color.WHITE);
+        g.setColor(new Color(216, 222, 233));
         g.setFont(new Font("Arial", Font.PLAIN, 20));
         String inst1 = "Use UP/DOWN to select | SPACE to purchase | ESC to continue";
         fm = g.getFontMetrics();
@@ -584,16 +786,17 @@ public class Renderer {
         g.drawString(title, (width - fm.stringWidth(title)) / 2, 80);
         
         g.setFont(new Font("Arial", Font.PLAIN, 18));
-        String subtitle = "Use UP/DOWN (or W/S) to navigate | SPACE or LEFT/RIGHT (or A/D) to toggle";
+        g.setColor(new Color(216, 222, 233));
+        String subtitle = "Use UP/DOWN to navigate | SPACE or arrows to toggle";
         fm = g.getFontMetrics();
         g.drawString(subtitle, (width - fm.stringWidth(subtitle)) / 2, 120);
         
         // Settings items
-        String[][] settings = {
-            {"Gradient Animation", Game.enableGradientAnimation ? "ON" : "OFF"},
-            {"Gradient Quality", Game.gradientQuality == 0 ? "Low (1 Layer)" : 
-                                 Game.gradientQuality == 1 ? "Medium (2 Layers)" : "High (3 Layers)"},
-            {"Grain Effect", Game.enableGrainEffect ? "ON" : "OFF"}
+        String[] settingNames = {"Gradient Animation", "Gradient Quality", "Grain Effect"};
+        String[] settingValues = {
+            Game.enableGradientAnimation ? "ON" : "OFF",
+            Game.gradientQuality == 0 ? "Low" : Game.gradientQuality == 1 ? "Medium" : "High",
+            Game.enableGrainEffect ? "ON" : "OFF"
         };
         
         String[] descriptions = {
@@ -603,52 +806,32 @@ public class Renderer {
         };
         
         int y = 200;
-        for (int i = 0; i < settings.length; i++) {
-            boolean isSelected = i == selectedItem;
+        for (int i = 0; i < settingNames.length; i++) {
+            // Build button text
+            String buttonText = settingNames[i] + ": " + settingValues[i];
+            settingsButtons[i] = new UIButton(buttonText, 0, 0, 700, 80, new Color(76, 86, 106), new Color(235, 203, 139));
             
-            // Draw selection highlight with glow
-            if (isSelected) {
-                g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f));
-                g.setColor(new Color(235, 203, 139)); // Palette yellow // Palette yellow
-                g.setStroke(new BasicStroke(6));
-                g.drawRect(width / 2 - 360, y - 30, 720, 100);
-                
-                g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
-                g.setColor(new Color(235, 203, 139)); // Palette yellow
-                g.setStroke(new BasicStroke(3));
-                g.drawRect(width / 2 - 355, y - 25, 710, 90);
-            }
+            settingsButtons[i].setPosition((width - 700) / 2, y - 20);
+            settingsButtons[i].update(i == selectedItem, time);
+            settingsButtons[i].draw(g, time);
             
-            // Draw setting box
-            g.setColor(new Color(76, 86, 106)); // Palette dark blue-gray
-            g.fillRect(width / 2 - 350, y - 20, 700, 80);
-            
-            // Draw setting name
-            g.setColor(Color.WHITE);
-            g.setFont(new Font("Arial", Font.BOLD, 24));
-            g.drawString(settings[i][0], width / 2 - 330, y + 10);
-            
-            // Draw setting value
-            g.setFont(new Font("Arial", Font.PLAIN, 20));
-            g.setColor(new Color(163, 190, 140)); // Palette green
-            g.drawString(settings[i][1], width / 2 - 330, y + 40);
-            
-            // Draw description
-            if (isSelected) {
+            // Draw description below if selected
+            if (i == selectedItem) {
                 g.setFont(new Font("Arial", Font.ITALIC, 16));
                 g.setColor(new Color(216, 222, 233)); // Palette light gray
-                g.drawString(descriptions[i], width / 2 - 330, y + 65);
+                fm = g.getFontMetrics();
+                g.drawString(descriptions[i], (width - fm.stringWidth(descriptions[i])) / 2, y + 85);
             }
             
-            y += 120;
+            y += 150;
         }
         
         // Instructions
-        g.setColor(Color.WHITE);
+        g.setColor(new Color(216, 222, 233));
         g.setFont(new Font("Arial", Font.PLAIN, 20));
-        String esc = "Press ESC to return to menu";
+        String inst = "Press ESC to return to menu";
         fm = g.getFontMetrics();
-        g.drawString(esc, (width - fm.stringWidth(esc)) / 2, height - 50);
+        g.drawString(inst, (width - fm.stringWidth(inst)) / 2, height - 50);
     }
     
     // Optimized Balatro-style animated gradient system

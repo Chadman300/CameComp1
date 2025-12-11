@@ -12,7 +12,7 @@ public class ShopManager {
     }
     
     public void setSelectedShopItem(int item) {
-        this.selectedShopItem = Math.max(0, Math.min(6, item));
+        this.selectedShopItem = Math.max(0, Math.min(5, item));
     }
     
     public void selectPrevious() {
@@ -20,7 +20,7 @@ public class ShopManager {
     }
     
     public void selectNext() {
-        selectedShopItem = Math.min(6, selectedShopItem + 1);
+        selectedShopItem = Math.min(5, selectedShopItem + 1);
     }
     
     public int getItemCost(int itemIndex) {
@@ -30,8 +30,7 @@ public class ShopManager {
             case 2: return 150 + (gameData.getBulletSlowUpgradeLevel() * 75);
             case 3: return 200 + (gameData.getLuckyDodgeUpgradeLevel() * 100);
             case 4: return 250 + (gameData.getAttackWindowUpgradeLevel() * 125);
-            case 5: return 300; // Fire Rate upgrade
-            case 6: return 350; // Score multiplier
+            case 5: return 300; // Score multiplier
             default: return 0;
         }
     }
@@ -64,9 +63,6 @@ public class ShopManager {
                     gameData.setActiveAttackWindowLevel(gameData.getAttackWindowUpgradeLevel()); // Auto-select
                     break;
                 case 5:
-                    // Fire Rate upgrade (not implemented yet)
-                    break;
-                case 6:
                     // Score multiplier (not implemented yet)
                     break;
             }
@@ -82,7 +78,6 @@ public class ShopManager {
             "Bullet Slow - Slows enemy bullets by 0.1%",
             "Lucky Dodge - Small chance to phase through bullets",
             "Attack Window+ - Adds 1 second to boss vulnerability window",
-            "Fire Rate Up - Faster shooting (Coming Soon)",
             "Score Multiplier - Increases score gain (Coming Soon)"
         };
     }

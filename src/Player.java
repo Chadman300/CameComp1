@@ -36,18 +36,31 @@ public class Player {
     private void loadSprite() {
         if (missileSprite == null) {
             try {
-                missileSprite = ImageIO.read(new File("sprites/missile.png"));
+                BufferedImage original = ImageIO.read(new File("sprites/missile.png"));
+                missileSprite = rotateImage180(original);
             } catch (IOException e) {
                 System.err.println("Could not load missile sprite: " + e.getMessage());
             }
         }
         if (missileShadow == null) {
             try {
-                missileShadow = ImageIO.read(new File("sprites/missile_shadow.png"));
+                BufferedImage original = ImageIO.read(new File("sprites/missile_shadow.png"));
+                missileShadow = rotateImage180(original);
             } catch (IOException e) {
                 System.err.println("Could not load missile shadow: " + e.getMessage());
             }
         }
+    }
+    
+    private BufferedImage rotateImage180(BufferedImage img) {
+        int w = img.getWidth();
+        int h = img.getHeight();
+        BufferedImage rotated = new BufferedImage(w, h, img.getType());
+        Graphics2D g2d = rotated.createGraphics();
+        g2d.rotate(Math.PI, w / 2.0, h / 2.0);
+        g2d.drawImage(img, 0, 0, null);
+        g2d.dispose();
+        return rotated;
     }
     
     public void update(boolean[] keys, int screenWidth, int screenHeight) {
@@ -133,7 +146,7 @@ public class Player {
         Graphics2D g2d = (Graphics2D) g.create();
         g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
         g2d.translate(x, y);
-        g2d.rotate(angle + Math.PI / 2);
+        g2d.rotate(angle + Math.PI / 2); // Back to original rotation since sprite is now pre-rotated
         
         int spriteSize = SIZE * 3;
         

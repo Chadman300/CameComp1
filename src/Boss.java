@@ -8,16 +8,26 @@ import javax.imageio.ImageIO;
 
 public class Boss {
     private double x, y;
+    private double vx, vy; // Velocity
+    private double ax, ay; // Acceleration
     private double rotation; // Current rotation angle
     private double targetRotation; // Target rotation angle
+    private double angularVelocity; // Current rotation speed
     private int level;
-    private static final int SIZE = 100;
+    private boolean isMegaBoss; // Every 3rd boss is a mega boss
+    private int size; // Dynamic size based on boss type
+    private static final int BASE_SIZE = 100;
+    private static final double MAX_SPEED = 2.5; // Maximum movement speed
+    private static final double ACCELERATION = 0.15; // How fast to speed up
+    private static final double FRICTION = 0.92; // How fast to slow down (0.92 = 8% friction)
+    private static final double ANGULAR_ACCELERATION = 0.08; // How fast to turn
+    private static final double ANGULAR_FRICTION = 0.85; // Rotation damping
     private int shootTimer;
     private int shootInterval;
     private int patternType;
+    private int maxPatterns; // Maximum attack patterns unlocked
     private double targetX, targetY; // Target position for smooth movement
     private int moveTimer; // Timer to pick new target
-    private static final double MOVE_SPEED = 1.5; // Smooth movement speed
     private int beamAttackTimer; // Timer for beam attacks
     private int beamAttackInterval; // How often to spawn beam attacks
     private List<BeamAttack> beamAttacks; // Active beam attacks
@@ -30,13 +40,30 @@ public class Boss {
     public Boss(double x, double y, int level) {
         this.x = x;
         this.y = y;
+        this.vx = 0;
+        this.vy = 0;
+        this.ax = 0;
+        this.ay = 0;
         this.rotation = Math.PI / 2; // Start facing down
         this.targetRotation = Math.PI / 2;
+        this.angularVelocity = 0;
         this.level = level;
+        
+        // Every 3rd level is a mega boss
+        this.isMegaBoss = (level % 3 == 0);
+        
+        // Size: mega bosses are 150% size, mini bosses are 70% size
+        this.size = isMegaBoss ? (int)(BASE_SIZE * 1.5) : (int)(BASE_SIZE * 0.7);
+        
+        // Attack patterns unlock with each mega boss
+        // Mega boss 3 unlocks 3 patterns, mega boss 6 unlocks 6, etc.
+        int megaBossCount = (level + 2) / 3; // How many mega bosses have appeared (including this one)
+        this.maxPatterns = Math.min(megaBossCount * 3, 12); // Cap at 12 patterns
+        
         this.shootTimer = 0;
         this.shootInterval = Math.max(20, 60 - level * 5); // Faster shooting at higher levels
-        // Randomize starting pattern so each boss is different
-        this.patternType = (int)(Math.random() * 12);
+        // Start with random pattern from available pool
+        this.patternType = (int)(Math.random() * maxPatterns);
         // Start with current position as target
         this.targetX = x;
         this.targetY = y;
@@ -91,36 +118,75 @@ public class Boss {
             moveTimer = 0;
             
             // Pick random position in the top half of screen with some margin
-            targetX = SIZE + Math.random() * (screenWidth - SIZE * 2);
-            targetY = SIZE + Math.random() * (screenHeight / 2.5 - SIZE * 2);
+            targetX = size + Math.random() * (screenWidth - size * 2);
+            targetY = size + Math.random() * (screenHeight / 2.5 - size * 2);
         }
         
-        // Smoothly move towards target
+        // Calculate direction to target
         double dx = targetX - x;
         double dy = targetY - y;
         double distance = Math.sqrt(dx * dx + dy * dy);
         
-        if (distance > MOVE_SPEED) {
+        // Acceleration-based movement
+        if (distance > 10) { // Dead zone to prevent jittering
+            // Calculate desired acceleration direction
+            double accelStrength = ACCELERATION * (1.0 + level * 0.05);
+            ax = (dx / distance) * accelStrength * deltaTime;
+            ay = (dy / distance) * accelStrength * deltaTime;
+            
+            // Apply acceleration to velocity
+            vx += ax;
+            vy += ay;
+            
             // Calculate target rotation based on movement direction
             targetRotation = Math.atan2(dy, dx);
-            
-            // Move towards target at constant speed (scaled by delta time)
-            double moveSpeedAdjusted = MOVE_SPEED * (1.0 + level * 0.1) * deltaTime;
-            x += (dx / distance) * moveSpeedAdjusted;
-            y += (dy / distance) * moveSpeedAdjusted;
+        } else {
+            // Arrived at target, no acceleration
+            ax = 0;
+            ay = 0;
         }
         
-        // Smoothly interpolate rotation angle
+        // Apply friction
+        vx *= FRICTION;
+        vy *= FRICTION;
+        
+        // Limit max speed
+        double speed = Math.sqrt(vx * vx + vy * vy);
+        double maxSpeed = MAX_SPEED * (1.0 + level * 0.1);
+        if (speed > maxSpeed) {
+            vx = (vx / speed) * maxSpeed;
+            vy = (vy / speed) * maxSpeed;
+        }
+        
+        // Apply velocity to position
+        x += vx * deltaTime;
+        y += vy * deltaTime;
+        
+        // Smooth angular acceleration for rotation
         double rotationDiff = targetRotation - rotation;
         // Normalize angle difference to [-PI, PI]
         while (rotationDiff > Math.PI) rotationDiff -= 2 * Math.PI;
         while (rotationDiff < -Math.PI) rotationDiff += 2 * Math.PI;
-        // Smooth rotation (15% per frame, scaled by delta time)
-        rotation += rotationDiff * 0.15 * deltaTime;
         
-        // Keep boss within bounds
-        x = Math.max(SIZE, Math.min(screenWidth - SIZE, x));
-        y = Math.max(SIZE, Math.min(screenHeight / 3, y));
+        // Apply angular acceleration
+        double angularAccel = rotationDiff * ANGULAR_ACCELERATION * deltaTime;
+        angularVelocity += angularAccel;
+        
+        // Apply angular friction
+        angularVelocity *= ANGULAR_FRICTION;
+        
+        // Apply angular velocity to rotation
+        rotation += angularVelocity * deltaTime;
+        
+        // Keep boss within bounds (and bounce off walls)
+        if (x < size || x > screenWidth - size) {
+            x = Math.max(size, Math.min(screenWidth - size, x));
+            vx *= -0.5; // Bounce with energy loss
+        }
+        if (y < size || y > screenHeight / 3) {
+            y = Math.max(size, Math.min(screenHeight / 3, y));
+            vy *= -0.5; // Bounce with energy loss
+        }
         
         // Shooting pattern (scaled by delta time)
         shootTimer += deltaTime;
@@ -149,7 +215,8 @@ public class Boss {
     }
     
     private void shoot(List<Bullet> bullets, Player player) {
-        patternType = (patternType + 1) % (3 + level); // More patterns at higher levels
+        // Cycle through unlocked patterns only
+        patternType = (patternType + 1) % maxPatterns;
         
         switch (patternType % 12) {
             case 0: // Spiral pattern
@@ -339,7 +406,7 @@ public class Boss {
             // Rotate and draw sprite with shadow
             g2d.translate(x, y);
             g2d.rotate(rotation - Math.PI / 2); // Subtract 90 degrees to align sprite
-            int spriteSize = SIZE * 3;
+            int spriteSize = size * 2;
             
             // Draw shadow sprite
             if (shadow != null) {
@@ -356,8 +423,8 @@ public class Boss {
             Polygon shape = new Polygon();
             for (int i = 0; i < sides; i++) {
                 double angle = 2 * Math.PI * i / sides;
-                int px = (int)(x + SIZE * Math.cos(angle));
-                int py = (int)(y + SIZE * Math.sin(angle));
+                int px = (int)(x + size * Math.cos(angle));
+                int py = (int)(y + size * Math.sin(angle));
                 shape.addPoint(px, py);
             }
             // Draw shadow
@@ -365,60 +432,84 @@ public class Boss {
             g2d.translate(2, 2);
             g2d.fillPolygon(shape);
             g2d.translate(-2, -2);
-            // Draw shape
-            g2d.setColor(new Color(0, 100, 255));
+            // Draw shape - mega bosses have red tint
+            if (isMegaBoss) {
+                g2d.setColor(new Color(255, 50, 50)); // Red for mega boss
+            } else {
+                g2d.setColor(new Color(0, 100, 255)); // Blue for mini boss
+            }
             g2d.fillPolygon(shape);
         }
         
         g2d.dispose();
         
         // Draw level indicator below boss
-        g.setColor(Color.WHITE);
-        g.setFont(new Font("Arial", Font.BOLD, 14));
+        g.setColor(isMegaBoss ? new Color(255, 215, 0) : Color.WHITE); // Gold for mega, white for mini
+        g.setFont(new Font("Arial", Font.BOLD, isMegaBoss ? 18 : 14));
         String vehicleName = getVehicleName(level);
         FontMetrics fm = g.getFontMetrics();
-        g.drawString(vehicleName, (int)x - fm.stringWidth(vehicleName)/2, (int)y + SIZE/2 + 15);
+        g.drawString(vehicleName, (int)x - fm.stringWidth(vehicleName)/2, (int)y + size/2 + 15);
+        
+        // Show MEGA BOSS indicator
+        if (isMegaBoss) {
+            g.setColor(new Color(255, 50, 50));
+            g.setFont(new Font("Arial", Font.BOLD, 14));
+            String megaText = "!! MEGA BOSS !!";
+            fm = g.getFontMetrics();
+            g.drawString(megaText, (int)x - fm.stringWidth(megaText)/2, (int)y + size/2 + 32);
+        }
         
         g.setFont(new Font("Arial", Font.BOLD, 16));
         String levelText = "LV " + level;
         fm = g.getFontMetrics();
-        g.drawString(levelText, (int)x - fm.stringWidth(levelText)/2, (int)y + SIZE/2 + 32);
+        g.drawString(levelText, (int)x - fm.stringWidth(levelText)/2, (int)y + size/2 + (isMegaBoss ? 50 : 32));
     }
     
     private String getVehicleName(int lvl) {
         if (lvl % 2 == 1) {
             // Odd levels: Fighter planes
             switch ((lvl - 1) / 2 % 10) {
-                case 0: return "✈ MIG-15";
-                case 1: return "✈ MIG-21";
-                case 2: return "✈ MIG-29";
-                case 3: return "✈ SU-27";
-                case 4: return "✈ SU-57";
-                case 5: return "✈ F-86 SABRE";
-                case 6: return "✈ F-4 PHANTOM";
-                case 7: return "✈ F-15 EAGLE";
-                case 8: return "✈ F-22 RAPTOR";
-                default: return "✈ F-35 LIGHTNING";
+                case 0: return "[PLANE] MIG-15";
+                case 1: return "[PLANE] MIG-21";
+                case 2: return "[PLANE] MIG-29";
+                case 3: return "[PLANE] SU-27";
+                case 4: return "[PLANE] SU-57";
+                case 5: return "[PLANE] F-86 SABRE";
+                case 6: return "[PLANE] F-4 PHANTOM";
+                case 7: return "[PLANE] F-15 EAGLE";
+                case 8: return "[PLANE] F-22 RAPTOR";
+                default: return "[PLANE] F-35 LIGHTNING";
             }
         } else {
             // Even levels: Helicopters
             switch ((lvl / 2 - 1) % 10) {
-                case 0: return "🚁 UH-1 HUEY";
-                case 1: return "🚁 AH-64 APACHE";
-                case 2: return "🚁 MI-24 HIND";
-                case 3: return "🚁 CH-47 CHINOOK";
-                case 4: return "🚁 MI-28 HAVOC";
-                case 5: return "🚁 AH-1 COBRA";
-                case 6: return "🚁 KA-52 ALLIGATOR";
-                case 7: return "🚁 UH-60 BLACK HAWK";
-                case 8: return "🚁 MI-26 HALO";
-                default: return "🚁 AH-64E GUARDIAN";
+                case 0: return "[HELI] UH-1 HUEY";
+                case 1: return "[HELI] AH-64 APACHE";
+                case 2: return "[HELI] MI-24 HIND";
+                case 3: return "[HELI] CH-47 CHINOOK";
+                case 4: return "[HELI] MI-28 HAVOC";
+                case 5: return "[HELI] AH-1 COBRA";
+                case 6: return "[HELI] KA-52 ALLIGATOR";
+                case 7: return "[HELI] UH-60 BLACK HAWK";
+                case 8: return "[HELI] MI-26 HALO";
+                default: return "[HELI] AH-64E GUARDIAN";
             }
         }
     }
     
     public double getX() { return x; }
     public double getY() { return y; }
-    public int getSize() { return SIZE; }
-    public double getHitboxRadius() { return SIZE * 0.6; } // 60% of sprite size for fitting hitbox
+    public int getSize() { return size; }
+    public double getHitboxRadius() { return size * 0.6; } // 60% of sprite size for fitting hitbox
+    public boolean isMegaBoss() { return isMegaBoss; }
+    public String getVehicleName() { return getVehicleName(level); }
+    
+    // Get money reward based on boss type
+    public int getMoneyReward() {
+        if (isMegaBoss) {
+            return 500 + (level * 200); // Mega bosses give much more money
+        } else {
+            return 100 + (level * 50); // Mini bosses give less money
+        }
+    }
 }
