@@ -36,7 +36,7 @@ public class Player {
     private void loadSprite() {
         if (missileSprite == null) {
             try {
-                BufferedImage original = ImageIO.read(new File("sprites/missile.png"));
+                BufferedImage original = ImageIO.read(new File("sprites\\Missle Man Assets\\Missles\\Missle Red.png"));
                 //missileSprite = rotateImage180(original);
                 missileSprite = original;
             } catch (IOException e) {
@@ -45,7 +45,7 @@ public class Player {
         }
         if (missileShadow == null) {
             try {
-                BufferedImage original = ImageIO.read(new File("sprites/missile_shadow.png"));
+                BufferedImage original = ImageIO.read(new File("sprites\\Missle Man Assets\\Missles\\Missle Red Shadow.png"));
                 //missileShadow = rotateImage180(original);
                 missileShadow = original;
             } catch (IOException e) {
@@ -150,18 +150,18 @@ public class Player {
         g2d.translate(x, y);
         g2d.rotate(angle + Math.PI / 2); // Back to original rotation since sprite is now pre-rotated
         
-        int spriteSize = SIZE * 3;
+        int spriteSize = (int)(SIZE * 1.3);
         
         // Draw shadow sprite first
         if (missileShadow != null) {
             g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha * 0.6f));
-            g2d.drawImage(missileShadow, -spriteSize/2 + 3, -spriteSize/2 + 3, spriteSize, spriteSize, null);
+            g2d.drawImage(missileShadow, -spriteSize/2 + 2, -spriteSize/2 + 2, spriteSize, spriteSize * 2, null);
             g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
         }
         
         if (missileSprite != null) {
             // Draw sprite
-            g2d.drawImage(missileSprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize, null);
+            g2d.drawImage(missileSprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize * 2, null);
         } else {
             // Fallback: draw simple circle with shadow if sprite not loaded
             g2d.setColor(new Color(0, 0, 0, 100));

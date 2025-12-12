@@ -37,9 +37,9 @@ public class Renderer {
             statsButtons[i] = new UIButton(statNames[i], 0, 0, 840, 70, new Color(59, 66, 82), statColors[i]);
         }
         
-        // Initialize settings buttons (3 options)
-        settingsButtons = new UIButton[3];
-        for (int i = 0; i < 3; i++) {
+        // Initialize settings buttons (4 options)
+        settingsButtons = new UIButton[4];
+        for (int i = 0; i < 4; i++) {
             settingsButtons[i] = new UIButton("", 0, 0, 700, 80, new Color(76, 86, 106), new Color(235, 203, 139));
         }
     }
@@ -501,7 +501,7 @@ public class Renderer {
         }
     }
     
-    public void drawGame(Graphics2D g, int width, int height, Player player, Boss boss, List<Bullet> bullets, List<Particle> particles, List<BeamAttack> beamAttacks, int level, double time, boolean bossVulnerable, int dodgeCombo, boolean showCombo, boolean bossDeathAnimation, double bossDeathScale, double bossDeathRotation) {
+    public void drawGame(Graphics2D g, int width, int height, Player player, Boss boss, List<Bullet> bullets, List<Particle> particles, List<BeamAttack> beamAttacks, int level, double time, boolean bossVulnerable, int vulnerabilityTimer, int dodgeCombo, boolean showCombo, boolean bossDeathAnimation, double bossDeathScale, double bossDeathRotation) {
         // Draw vibrant animated sky gradient
         Color[] colors = getLevelGradientColors(level);
         drawAnimatedGradient(g, width, height, time, colors);
@@ -547,21 +547,25 @@ public class Renderer {
             boss.draw(g);
             if (bossVulnerable) {
                 // Pulsing ring around boss
+                // Calculate color based on time remaining (green -> yellow -> red)
+                double timeRatio = vulnerabilityTimer / 1200.0; // Normalize to 0-1
+                Color circleColor;
+                if (timeRatio > 0.5) {
+                    // Green to Yellow (first half)
+                    int green = 255;
+                    int red = (int)(255 * (1 - (timeRatio - 0.5) * 2));
+                    circleColor = new Color(red, green, 0, 150);
+                } else {
+                    // Yellow to Red (second half)
+                    int red = 255;
+                    int green = (int)(255 * (timeRatio * 2));
+                    circleColor = new Color(red, green, 0, 150);
+                }
+                
                 double pulseSize = 70 + Math.sin(time * 10) * 10;
-                g.setColor(new Color(235, 203, 139, 150));
+                g.setColor(circleColor);
                 g.setStroke(new BasicStroke(4f));
                 g.drawOval((int)(boss.getX() - pulseSize/2), (int)(boss.getY() - pulseSize/2), (int)pulseSize, (int)pulseSize);
-                
-                // "ATTACK NOW!" text
-                g.setFont(new Font("Arial", Font.BOLD, 20));
-                String attackText = "ATTACK NOW!";
-                FontMetrics fm = g.getFontMetrics();
-                int textX = (int)boss.getX() - fm.stringWidth(attackText) / 2;
-                int textY = (int)boss.getY() - 50;
-                g.setColor(new Color(0, 0, 0, 180));
-                g.fillRoundRect(textX - 5, textY - 20, fm.stringWidth(attackText) + 10, 28, 5, 5);
-                g.setColor(new Color(235, 203, 139));
-                g.drawString(attackText, textX, textY);
             }
         }
         
@@ -622,11 +626,24 @@ public class Renderer {
             
             // Vulnerability indicator
             if (bossVulnerable) {
-                g.setColor(new Color(255, 255, 100));
-                g.setFont(new Font("Arial", Font.BOLD, 12));
-                String vulnText = "<< VULNERABLE >>";
+                // Calculate color based on time remaining (green -> yellow -> red)
+                double timeRatio = vulnerabilityTimer / 1200.0;
+                Color textColor;
+                if (timeRatio > 0.5) {
+                    int green = 255;
+                    int red = (int)(255 * (1 - (timeRatio - 0.5) * 2));
+                    textColor = new Color(red, green, 0);
+                } else {
+                    int red = 255;
+                    int green = (int)(255 * (timeRatio * 2));
+                    textColor = new Color(red, green, 0);
+                }
+                
+                g.setColor(textColor);
+                g.setFont(new Font("Arial", Font.BOLD, 14));
+                String vulnText = "ATTACK NOW!";
                 fm = g.getFontMetrics();
-                int vulnX = barX + barWidth - fm.stringWidth(vulnText) - 10;
+                int vulnX = barX + barWidth - fm.stringWidth(vulnText) - 15;
                 g.drawString(vulnText, vulnX, barY + 18);
             }
             
@@ -792,17 +809,19 @@ public class Renderer {
         g.drawString(subtitle, (width - fm.stringWidth(subtitle)) / 2, 120);
         
         // Settings items
-        String[] settingNames = {"Gradient Animation", "Gradient Quality", "Grain Effect"};
+        String[] settingNames = {"Gradient Animation", "Gradient Quality", "Grain Effect", "Particle Effects"};
         String[] settingValues = {
             Game.enableGradientAnimation ? "ON" : "OFF",
             Game.gradientQuality == 0 ? "Low" : Game.gradientQuality == 1 ? "Medium" : "High",
-            Game.enableGrainEffect ? "ON" : "OFF"
+            Game.enableGrainEffect ? "ON" : "OFF",
+            Game.enableParticles ? "ON" : "OFF"
         };
         
         String[] descriptions = {
             "Animate gradient backgrounds (may affect performance)",
             "Number of gradient layers (higher = better but slower)",
-            "Add grain texture overlay (performance impact)"
+            "Add grain texture overlay (performance impact)",
+            "Enable particle effects (trails, explosions, etc.)"
         };
         
         int y = 200;

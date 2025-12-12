@@ -15,8 +15,6 @@ public class BeamAttack {
     
     private static final int WARNING_DURATION = 90; // 1.5 seconds warning
     private static final int BEAM_DURATION = 30;    // 0.5 seconds active beam
-    private static final Color WARNING_COLOR = new Color(235, 203, 139, 150); // Yellow/gold warning
-    private static final Color BEAM_COLOR = new Color(191, 97, 106, 200);     // Red damage beam
     
     public BeamAttack(double position, double width, BeamType type) {
         this.position = position;
@@ -68,12 +66,35 @@ public class BeamAttack {
     
     public void draw(Graphics2D g, int screenWidth, int screenHeight) {
         if (warningTimer > 0) {
+            // Calculate color transition: green → yellow → red
+            // Progress from 0 (start) to 1 (end of warning)
+            double progress = 1.0 - (warningTimer / (double)WARNING_DURATION);
+            
+            Color warningColor;
+            if (progress < 0.5) {
+                // First half: green to yellow
+                // Green: 163, 190, 140 -> Yellow: 235, 203, 139
+                double t = progress * 2; // 0 to 1
+                int r = (int)(163 + (235 - 163) * t);
+                int g1 = (int)(190 + (203 - 190) * t);
+                int b = (int)(140 + (139 - 140) * t);
+                warningColor = new Color(r, g1, b);
+            } else {
+                // Second half: yellow to red
+                // Yellow: 235, 203, 139 -> Red: 191, 97, 106
+                double t = (progress - 0.5) * 2; // 0 to 1
+                int r = (int)(235 + (191 - 235) * t);
+                int g1 = (int)(203 + (97 - 203) * t);
+                int b = (int)(139 + (106 - 139) * t);
+                warningColor = new Color(r, g1, b);
+            }
+            
             // Draw blinking warning line
             // Blink faster as warning time runs out
             double blinkSpeed = 0.1 + (WARNING_DURATION - warningTimer) / WARNING_DURATION * 0.4;
             int alpha = (int)(Math.abs(Math.sin(warningTimer * blinkSpeed)) * 150 + 50);
             
-            g.setColor(new Color(235, 203, 139, alpha));
+            g.setColor(new Color(warningColor.getRed(), warningColor.getGreen(), warningColor.getBlue(), alpha));
             
             if (type == BeamType.VERTICAL) {
                 // Draw vertical warning line
@@ -81,7 +102,7 @@ public class BeamAttack {
                 g.fillRect(x, 0, (int)width, screenHeight);
                 
                 // Draw warning borders
-                g.setColor(new Color(235, 203, 139, Math.min(255, alpha + 100)));
+                g.setColor(new Color(warningColor.getRed(), warningColor.getGreen(), warningColor.getBlue(), Math.min(255, alpha + 100)));
                 g.setStroke(new BasicStroke(3));
                 g.drawLine(x, 0, x, screenHeight);
                 g.drawLine(x + (int)width, 0, x + (int)width, screenHeight);
@@ -103,7 +124,7 @@ public class BeamAttack {
                 g.fillRect(0, y, screenWidth, (int)width);
                 
                 // Draw warning borders
-                g.setColor(new Color(235, 203, 139, Math.min(255, alpha + 100)));
+                g.setColor(new Color(warningColor.getRed(), warningColor.getGreen(), warningColor.getBlue(), Math.min(255, alpha + 100)));
                 g.setStroke(new BasicStroke(3));
                 g.drawLine(0, y, screenWidth, y);
                 g.drawLine(0, y + (int)width, screenWidth, y + (int)width);
@@ -129,8 +150,8 @@ public class BeamAttack {
                 g.setColor(new Color(191, 97, 106, 80));
                 g.fillRect(x - 10, 0, (int)width + 20, screenHeight);
                 
-                // Main beam
-                g.setColor(BEAM_COLOR);
+                // Main beam (red)
+                g.setColor(new Color(191, 97, 106, 200));
                 g.fillRect(x, 0, (int)width, screenHeight);
                 
                 // Inner bright core
@@ -150,8 +171,8 @@ public class BeamAttack {
                 g.setColor(new Color(191, 97, 106, 80));
                 g.fillRect(0, y - 10, screenWidth, (int)width + 20);
                 
-                // Main beam
-                g.setColor(BEAM_COLOR);
+                // Main beam (red)
+                g.setColor(new Color(191, 97, 106, 200));
                 g.fillRect(0, y, screenWidth, (int)width);
                 
                 // Inner bright core
