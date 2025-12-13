@@ -115,21 +115,22 @@ public class Player {
         x += vx * deltaTime;
         y += vy * deltaTime;
         
-        // Keep player on screen (with bounce)
-        if (x < SIZE) {
-            x = SIZE;
+        // Keep player on screen (with extended boundaries for camera following)
+        int margin = 50; // Extra space beyond screen edges
+        if (x < SIZE - margin) {
+            x = SIZE - margin;
             vx *= -0.3;
         }
-        if (x > screenWidth - SIZE) {
-            x = screenWidth - SIZE;
+        if (x > screenWidth - SIZE + margin) {
+            x = screenWidth - SIZE + margin;
             vx *= -0.3;
         }
-        if (y < SIZE) {
-            y = SIZE;
+        if (y < SIZE - margin) {
+            y = SIZE - margin;
             vy *= -0.3;
         }
-        if (y > screenHeight - SIZE) {
-            y = screenHeight - SIZE;
+        if (y > screenHeight - SIZE + margin) {
+            y = screenHeight - SIZE + margin;
             vy *= -0.3;
         }
     }
@@ -231,8 +232,8 @@ public class Player {
         double dx = x - boss.getX();
         double dy = y - boss.getY();
         double distance = Math.sqrt(dx * dx + dy * dy);
-        // Larger hitbox for boss collision (60% of sprite size)
-        return distance < (SIZE * 0.6) + (boss.getSize() * 0.6);
+        // Smaller hitbox for boss collision (40% of sprite size)
+        return distance < (SIZE * 0.4) + (boss.getSize() * 0.6);
     }
     
     public void triggerFlicker() {
@@ -248,4 +249,17 @@ public class Player {
     public int getSize() { return SIZE; }
     public double getVX() { return vx; }
     public double getVY() { return vy; }
+    
+    // Set position (for debug teleport)
+    public void setPosition(double x, double y) {
+        this.x = x;
+        this.y = y;
+    }
+    
+    // Apply dash boost (used by DASH active item)
+    public void applyDashBoost(double multiplier) {
+        // Increase current velocity by the multiplier
+        vx *= multiplier;
+        vy *= multiplier;
+    }
 }

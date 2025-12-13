@@ -50,7 +50,7 @@ public class Boss {
     
     // Animation for helicopter blades
     private double bladeRotation = 0;
-    private static final double BLADE_ROTATION_SPEED = 0.5; // Radians per frame
+    private static final double BLADE_ROTATION_SPEED = 0.2; // Radians per frame (reduced from 0.5)
     
     public Boss(double x, double y, int level) {
         this.x = x;
@@ -403,16 +403,16 @@ public class Boss {
                 shootSpiral(bullets);
                 break;
             case 1: // Circle pattern
-                shootCircle(bullets, 5 + level);
+                shootCircle(bullets, 10 + level); // Increased from 5 + level
                 break;
             case 2: // Aimed at player
-                shootAtPlayer(bullets, player, 2);
+                shootAtPlayer(bullets, player, 4); // Increased from 2
                 break;
             case 3: // Wave pattern
                 shootWave(bullets);
                 break;
             case 4: // Random spray
-                shootRandom(bullets, 3 + level / 2);
+                shootRandom(bullets, 6 + level); // Increased from 3 + level / 2
                 break;
             case 5: // Fast bullets
                 shootFast(bullets, player);
@@ -448,13 +448,13 @@ public class Boss {
     }
     
     private void shootSpiral(List<Bullet> bullets) {
-        int numBullets = 4 + level / 2;
+        int numBullets = 8 + level; // Increased from 4 + level / 2
         double angleOffset = shootTimer * 0.1;
         double speedMultiplier = Math.min(1.0, 0.4 + (level * 0.12)); // Starts at 40%, reaches 100% at level 5
         for (int i = 0; i < numBullets; i++) {
             double angle = (Math.PI * 2 * i / numBullets) + angleOffset;
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 3 * speedMultiplier, Math.sin(angle) * 3 * speedMultiplier));
         }
     }
@@ -463,8 +463,8 @@ public class Boss {
         double speedMultiplier = Math.min(1.0, 0.4 + (level * 0.12)); // Starts at 40%, reaches 100% at level 5
         for (int i = 0; i < numBullets; i++) {
             double angle = Math.PI * 2 * i / numBullets;
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 2.5 * speedMultiplier, Math.sin(angle) * 2.5 * speedMultiplier));
         }
     }
@@ -474,20 +474,20 @@ public class Boss {
         double angleToPlayer = Math.atan2(player.getY() - y, player.getX() - x);
         for (int i = -spread; i <= spread; i++) {
             double angle = angleToPlayer + (i * 0.2);
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 4 * speedMultiplier, Math.sin(angle) * 4 * speedMultiplier));
         }
     }
     
     private void shootWave(List<Bullet> bullets) {
         double speedMultiplier = Math.min(1.0, 0.4 + (level * 0.12)); // Starts at 40%, reaches 100% at level 5
-        int numBullets = 6 + level;
+        int numBullets = 12 + level; // Increased from 6 + level
         for (int i = 0; i < numBullets; i++) {
             double angle = Math.PI / 4 + (Math.PI / 2 * i / numBullets);
             double speed = (2 + Math.sin(i * 0.5) * 1.5) * speedMultiplier;
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * speed, Math.sin(angle) * speed));
         }
     }
@@ -497,8 +497,8 @@ public class Boss {
         for (int i = 0; i < numBullets; i++) {
             double angle = Math.random() * Math.PI * 2;
             double speed = (2 + Math.random() * 2) * speedMultiplier;
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * speed, Math.sin(angle) * speed));
         }
     }
@@ -508,8 +508,8 @@ public class Boss {
         double angleToPlayer = Math.atan2(player.getY() - y, player.getX() - x);
         for (int i = 0; i < 3 + level / 2; i++) {
             double angle = angleToPlayer + (Math.random() - 0.5) * 0.5;
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 6 * speedMultiplier, Math.sin(angle) * 6 * speedMultiplier, Bullet.BulletType.FAST));
         }
     }
@@ -519,8 +519,8 @@ public class Boss {
         int numBullets = 3 + level / 2;
         for (int i = 0; i < numBullets; i++) {
             double angle = Math.PI * 2 * i / numBullets;
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 1.5 * speedMultiplier, Math.sin(angle) * 1.5 * speedMultiplier, Bullet.BulletType.LARGE));
         }
     }
@@ -533,8 +533,8 @@ public class Boss {
         // Homing bullets
         for (int i = 0; i < 1; i++) {
             double angle = angleToPlayer + (i - 0.5) * 0.3;
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 2.5 * speedMultiplier, Math.sin(angle) * 2.5 * speedMultiplier, Bullet.BulletType.HOMING));
         }
         
@@ -542,8 +542,8 @@ public class Boss {
         if (level >= 3) {
             for (int i = 0; i < 4; i++) {
                 double angle = Math.PI * 2 * i / 6;
-                double spawnX = x + Math.cos(angle) * size;
-                double spawnY = y + Math.sin(angle) * size;
+                double spawnX = x + Math.cos(angle) * size * 1.5;
+                double spawnY = y + Math.sin(angle) * size * 1.5;
                 bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 3 * speedMultiplier, Math.sin(angle) * 3 * speedMultiplier, Bullet.BulletType.BOUNCING));
             }
         }
@@ -554,8 +554,8 @@ public class Boss {
         int numBullets = 3 + level / 2;
         for (int i = 0; i < numBullets; i++) {
             double angle = Math.PI * 2 * i / numBullets;
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 2 * speedMultiplier, Math.sin(angle) * 2 * speedMultiplier, Bullet.BulletType.SPIRAL));
         }
     }
@@ -565,8 +565,8 @@ public class Boss {
         int numBullets = 2 + level / 2;
         for (int i = 0; i < numBullets; i++) {
             double angle = Math.PI * 2 * i / numBullets;
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 2.5 * speedMultiplier, Math.sin(angle) * 2.5 * speedMultiplier, Bullet.BulletType.SPLITTING));
         }
     }
@@ -576,8 +576,8 @@ public class Boss {
         double angleToPlayer = Math.atan2(player.getY() - y, player.getX() - x);
         for (int i = -1; i <= 1; i++) {
             double angle = angleToPlayer + i * 0.3;
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 1.5 * speedMultiplier, Math.sin(angle) * 1.5 * speedMultiplier, Bullet.BulletType.ACCELERATING));
         }
     }
@@ -587,8 +587,8 @@ public class Boss {
         int numBullets = 5 + level / 2;
         for (int i = 0; i < numBullets; i++) {
             double angle = Math.PI / 4 + (Math.PI / 2 * i / numBullets);
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 2.5 * speedMultiplier, Math.sin(angle) * 2.5 * speedMultiplier, Bullet.BulletType.WAVE));
         }
     }
@@ -598,8 +598,8 @@ public class Boss {
         int numBullets = 2 + level / 3;
         for (int i = 0; i < numBullets; i++) {
             double angle = Math.PI * 2 * i / numBullets;
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 2.0 * speedMultiplier, Math.sin(angle) * 2.0 * speedMultiplier, Bullet.BulletType.BOMB));
         }
     }
@@ -610,8 +610,8 @@ public class Boss {
         int numBullets = 1 + (level >= 5 ? 1 : 0); // Only 1-2 grenades max
         for (int i = 0; i < numBullets; i++) {
             double angle = angleToPlayer + (i - numBullets/2.0) * 0.3;
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 2.5 * speedMultiplier, Math.sin(angle) * 2.5 * speedMultiplier, Bullet.BulletType.GRENADE));
         }
     }
@@ -622,8 +622,8 @@ public class Boss {
         int numBullets = 1 + (level >= 5 ? 1 : 0);
         for (int i = 0; i < numBullets; i++) {
             double angle = Math.PI * 2 * i / numBullets;
-            double spawnX = x + Math.cos(angle) * size;
-            double spawnY = y + Math.sin(angle) * size;
+            double spawnX = x + Math.cos(angle) * size * 1.5;
+            double spawnY = y + Math.sin(angle) * size * 1.5;
             bullets.add(new Bullet(spawnX, spawnY, Math.cos(angle) * 1.5 * speedMultiplier, Math.sin(angle) * 1.5 * speedMultiplier, Bullet.BulletType.NUKE));
         }
     }
@@ -756,6 +756,7 @@ public class Boss {
                 
                 if (bladeSprite != null) {
                     Graphics2D bladeG2d = (Graphics2D) g2d.create();
+                    bladeG2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f)); // Add transparency
                     bladeG2d.rotate(bladeRotation); // Apply blade rotation
                     int bladeSize = (int)(spriteWidth * 1.2); // Blades slightly larger than body
                     bladeG2d.drawImage(bladeSprite, -bladeSize/2, -bladeSize/2, bladeSize, bladeSize, null);
@@ -823,6 +824,10 @@ public class Boss {
     
     public double getX() { return x; }
     public double getY() { return y; }
+    public void setPosition(double x, double y) { 
+        this.x = x; 
+        this.y = y; 
+    }
     public int getSize() { return size; }
     public double getHitboxRadius() { return size * 0.6; } // 60% of sprite size for fitting hitbox
     public boolean isMegaBoss() { return isMegaBoss; }

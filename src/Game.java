@@ -72,9 +72,24 @@ public class Game extends JPanel implements Runnable {
     
     // Input
     private boolean[] keys;
+    private boolean eKeyPressed; // Track E key state to prevent continuous activation
     
     // Animation
     private double gradientTime;
+    
+    // Item unlock animation
+    private boolean itemUnlockAnimation;
+    private boolean itemUnlockDismissing; // True when animation is fading out
+    private int itemUnlockTimer;
+    private int itemUnlockDismissTimer; // Timer for fade-out animation
+    private String unlockedItemName;
+    private static final int ITEM_UNLOCK_DURATION = 180; // 3 seconds
+    private static final int ITEM_DISMISS_DURATION = 30; // 0.5 seconds fade out
+    
+    // UI Transitions
+    private GameState previousState;
+    private float stateTransitionProgress; // 0.0 = old state, 1.0 = new state
+    private static final float TRANSITION_SPEED = 0.08f; // Speed of state transitions
     
     // Visual effects
     private double screenShakeX;
@@ -90,6 +105,8 @@ public class Game extends JPanel implements Runnable {
     private boolean bossVulnerable;
     private int vulnerabilityTimer;
     private int invulnerabilityTimer; // Prevents boss from going vulnerable at level start
+    private int bossHitCount; // Number of times boss has been hit (max 3)
+    private static final int BOSS_MAX_HITS = 3;
     private static final int VULNERABILITY_DURATION = 1200; // 20 second window
     private static final int INVULNERABILITY_DURATION = 150; // 2.5 seconds at start (changed from 300/5 seconds)
     private boolean bossDeathAnimation;
@@ -97,6 +114,23 @@ public class Game extends JPanel implements Runnable {
     private static final int DEATH_ANIMATION_DURATION = 180; // 3 seconds
     private double bossDeathScale;
     private double bossDeathRotation;
+    
+    // Active item effects
+    private boolean playerInvincible; // For INVINCIBILITY item and DASH i-frames
+    private boolean shieldActive; // For SHIELD item
+    private int respawnInvincibilityTimer; // Shorter invincibility after respawn
+    private double dashSpeedMultiplier; // For DASH item
+    
+    // Camera tracking with smooth interpolation
+    private double cameraX = 0;
+    private double cameraY = 0;
+    private static final double CAMERA_SMOOTHING = 0.02; // Slower and smoother (was 0.05)
+    private static final double CAMERA_DEADZONE = 80; // Distance from center before camera moves
+    private static final double CAMERA_MAX_OFFSET = 100; // Max pixels camera can move from center
+    private boolean introPanActive = false;
+    private int introPanTimer = 0;
+    private static final int INTRO_PAN_DURATION = 240; // 4 seconds total (2s boss entrance, 2s pan back)
+    private double bossEntranceY = -200; // Boss starts above screen
     
     // Settings
     private int selectedSettingsItem;
@@ -125,6 +159,8 @@ public class Game extends JPanel implements Runnable {
     
     // Loading progress
     private volatile int loadingProgress = 0;
+    private volatile int targetLoadingProgress = 0;
+    private double displayedLoadingProgress = 0.0;
     private volatile boolean loadingComplete = false;
     
     public Game() {
@@ -152,6 +188,13 @@ public class Game extends JPanel implements Runnable {
         settingsScroll = 0;
         selectedSettingsItem = 0;
         gradientTime = 0;
+        itemUnlockAnimation = false;
+        itemUnlockDismissing = false;
+        itemUnlockTimer = 0;
+        itemUnlockDismissTimer = 0;
+        previousState = GameState.MENU;
+        stateTransitionProgress = 1.0f;
+        unlockedItemName = "";
         screenShakeX = 0;
         screenShakeY = 0;
         trailSpawnTimer = 0;
@@ -176,6 +219,10 @@ public class Game extends JPanel implements Runnable {
                 if (e.getKeyCode() < keys.length) {
                     keys[e.getKeyCode()] = false;
                 }
+                // Reset SPACE key tracking on release
+                if (e.getKeyCode() == KeyEvent.VK_SPACE) {
+                    eKeyPressed = false;
+                }
             }
         });
         
@@ -199,11 +246,11 @@ public class Game extends JPanel implements Runnable {
                 else if (key == KeyEvent.VK_SPACE || key == KeyEvent.VK_ENTER) {
                     screenShakeIntensity = 5;
                     switch (selectedMenuItem) {
-                        case 0: gameState = GameState.LEVEL_SELECT; break;
-                        case 1: gameState = GameState.INFO; break;
-                        case 2: gameState = GameState.STATS; break;
-                        case 3: gameState = GameState.SHOP; break;
-                        case 4: gameState = GameState.SETTINGS; break;
+                        case 0: transitionToState(GameState.LEVEL_SELECT); break;
+                        case 1: transitionToState(GameState.INFO); break;
+                        case 2: transitionToState(GameState.STATS); break;
+                        case 3: transitionToState(GameState.SHOP); break;
+                        case 4: transitionToState(GameState.SETTINGS); break;
                     }
                 }
                 else if (key == KeyEvent.VK_ESCAPE) {
@@ -218,18 +265,34 @@ public class Game extends JPanel implements Runnable {
                     }
                 }
                 // Legacy hotkeys still work
-                else if (key == KeyEvent.VK_I) { gameState = GameState.INFO; screenShakeIntensity = 5; }
-                else if (key == KeyEvent.VK_P) { gameState = GameState.SHOP; screenShakeIntensity = 5; }
-                else if (key == KeyEvent.VK_O) { gameState = GameState.SETTINGS; screenShakeIntensity = 5; }
+                else if (key == KeyEvent.VK_I) { transitionToState(GameState.INFO); screenShakeIntensity = 5; }
+                else if (key == KeyEvent.VK_P) { transitionToState(GameState.SHOP); screenShakeIntensity = 5; }
+                else if (key == KeyEvent.VK_O) { transitionToState(GameState.SETTINGS); screenShakeIntensity = 5; }
                 // Debug menu shortcut
-                else if (key == KeyEvent.VK_F3) { gameState = GameState.DEBUG; screenShakeIntensity = 5; }
+                else if (key == KeyEvent.VK_F3) { transitionToState(GameState.DEBUG); screenShakeIntensity = 5; }
                 break;
                 
             case STATS:
                 if (key == KeyEvent.VK_UP || key == KeyEvent.VK_W) { selectedStatItem = Math.max(0, selectedStatItem - 1); screenShakeIntensity = 1; }
-                else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_S) { selectedStatItem = Math.min(3, selectedStatItem + 1); screenShakeIntensity = 1; }
-                else if (key == KeyEvent.VK_LEFT || key == KeyEvent.VK_A) { gameData.adjustUpgrade(selectedStatItem, -1); screenShakeIntensity = 2; }
-                else if (key == KeyEvent.VK_RIGHT || key == KeyEvent.VK_D) { gameData.adjustUpgrade(selectedStatItem, 1); screenShakeIntensity = 2; }
+                else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_S) { selectedStatItem = Math.min(4, selectedStatItem + 1); screenShakeIntensity = 1; }
+                else if (key == KeyEvent.VK_LEFT || key == KeyEvent.VK_A) {
+                    if (selectedStatItem == 4 && gameData.hasActiveItems()) {
+                        gameData.equipPreviousItem();
+                        screenShakeIntensity = 2;
+                    } else {
+                        gameData.adjustUpgrade(selectedStatItem, -1);
+                        screenShakeIntensity = 2;
+                    }
+                }
+                else if (key == KeyEvent.VK_RIGHT || key == KeyEvent.VK_D) {
+                    if (selectedStatItem == 4 && gameData.hasActiveItems()) {
+                        gameData.equipNextItem();
+                        screenShakeIntensity = 2;
+                    } else {
+                        gameData.adjustUpgrade(selectedStatItem, 1);
+                        screenShakeIntensity = 2;
+                    }
+                }
                 else if (key == KeyEvent.VK_ESCAPE) { gameState = GameState.MENU; screenShakeIntensity = 3; }
                 break;
                 
@@ -240,7 +303,7 @@ public class Game extends JPanel implements Runnable {
                     screenShakeIntensity = 1; 
                 }
                 else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_S) { 
-                    selectedSettingsItem = Math.min(9, selectedSettingsItem + 1); 
+                    selectedSettingsItem = Math.min(9, selectedSettingsItem + 1);
                     ensureSettingsItemVisible();
                     screenShakeIntensity = 1; 
                 }
@@ -272,7 +335,19 @@ public class Game extends JPanel implements Runnable {
                     startGame();
                 } else if (key == KeyEvent.VK_ESCAPE) {
                     // Return to main menu
-                    gameState = GameState.MENU;
+                    transitionToState(GameState.MENU);
+                } else if (key == KeyEvent.VK_SPACE && !eKeyPressed) {
+                    // Activate equipped item (only once per key press)
+                    eKeyPressed = true;
+                    ActiveItem item = gameData.getEquippedItem();
+                    if (item != null && item.canActivate()) {
+                        item.activate();
+                        screenShakeIntensity = 3;
+                    }
+                } else if (key == KeyEvent.VK_T && currentBoss != null && player != null) {
+                    // Debug: Teleport player to boss (instant death)
+                    player.setPosition(currentBoss.getX(), currentBoss.getY());
+                    screenShakeIntensity = 10;
                 }
                 break;
                 
@@ -303,12 +378,23 @@ public class Game extends JPanel implements Runnable {
                     gameData.setSurvivalTime(0);
                     startGame();
                 } else if (key == KeyEvent.VK_SPACE) {
-                    gameState = GameState.MENU;
+                    transitionToState(GameState.MENU);
                 }
                 break;
                 
             case WIN:
                 if (key == KeyEvent.VK_SPACE) {
+                    // If animation is playing, start dismiss animation
+                    if (itemUnlockAnimation && !itemUnlockDismissing) {
+                        itemUnlockDismissing = true;
+                        itemUnlockDismissTimer = ITEM_DISMISS_DURATION;
+                        return;
+                    }
+                    // If already dismissing, wait for it to complete
+                    if (itemUnlockDismissing) {
+                        return;
+                    }
+                    
                     // Unlock next level
                     int currentLevel = gameData.getCurrentLevel();
                     gameData.setMaxUnlockedLevel(Math.max(gameData.getMaxUnlockedLevel(), currentLevel + 1));
@@ -319,6 +405,13 @@ public class Game extends JPanel implements Runnable {
                         gameData.setBossDefeated(currentLevel - 1, true);
                         bossReward += 100;
                     }
+                    
+                    // Apply LUCKY_CHARM multiplier if equipped
+                    ActiveItem equippedItem = gameData.getEquippedItem();
+                    if (equippedItem != null && equippedItem.getType() == ActiveItem.ItemType.LUCKY_CHARM) {
+                        bossReward = (int)(bossReward * 1.5); // 50% bonus
+                    }
+                    
                     gameData.addRunMoney(bossReward);
                     gameData.addTotalMoney(bossReward);
                     
@@ -353,8 +446,13 @@ public class Game extends JPanel implements Runnable {
                     gameData.giveCheatMoney(100);
                     screenShakeIntensity = 2;
                 }
+                else if (key == KeyEvent.VK_6) {
+                    // Unlock all active items
+                    gameData.unlockAllItems();
+                    screenShakeIntensity = 5;
+                }
                 else if (key == KeyEvent.VK_ESCAPE) {
-                    gameState = GameState.MENU;
+                    transitionToState(GameState.MENU);
                     screenShakeIntensity = 3;
                 }
                 break;
@@ -416,16 +514,26 @@ public class Game extends JPanel implements Runnable {
     
     private void startGame() {
         gameState = GameState.PLAYING;
-        player = new Player(WIDTH / 2, HEIGHT - 100, gameData.getActiveSpeedLevel());
+        player = new Player(WIDTH / 2, HEIGHT - 200, gameData.getActiveSpeedLevel());
         bullets.clear();
         particles.clear();
-        currentBoss = new Boss(WIDTH / 2, 100, gameData.getCurrentLevel());
+        currentBoss = new Boss(WIDTH / 2, 100, gameData.getCurrentLevel()); // Normal position, will move during intro
         gameData.setSurvivalTime(0);
         dodgeCombo = 0;
         comboTimer = 0;
         bossVulnerable = false;
         vulnerabilityTimer = 0;
         invulnerabilityTimer = INVULNERABILITY_DURATION; // 5 seconds of immunity
+        bossHitCount = 0;
+        respawnInvincibilityTimer = 0; // No respawn invincibility at start
+        
+        // Start intro sequence with boss entrance
+        introPanActive = true;
+        introPanTimer = 0;
+        bossEntranceY = -200; // Boss will start above screen
+        cameraX = 0;
+        cameraY = 0;
+        
         screenShakeIntensity = 0;
         bossDeathAnimation = false;
         deathAnimationTimer = 0;
@@ -440,6 +548,12 @@ public class Game extends JPanel implements Runnable {
         frameCount = 0;
         lastFPSTime = System.currentTimeMillis();
         bossKillTime = 0;
+        
+        // Start active item cooldown at start of level
+        ActiveItem equippedItem = gameData.getEquippedItem();
+        if (equippedItem != null) {
+            equippedItem.startLevelCooldown();
+        }
     }
     
     public void start() {
@@ -499,12 +613,72 @@ public class Game extends JPanel implements Runnable {
     }
     
     private void update(double deltaTime) {
+        // Update item unlock animation timer (let it countdown for animation progress)
+        if (itemUnlockTimer > 0) {
+            itemUnlockTimer--;
+        }
+        
+        // Update dismiss animation
+        if (itemUnlockDismissing) {
+            itemUnlockDismissTimer--;
+            if (itemUnlockDismissTimer <= 0) {
+                itemUnlockAnimation = false;
+                itemUnlockDismissing = false;
+            }
+        }
+        
+        // Update state transitions
+        if (stateTransitionProgress < 1.0f) {
+            stateTransitionProgress = Math.min(1.0f, stateTransitionProgress + TRANSITION_SPEED);
+        }
+        
         if (gameState != GameState.PLAYING) return;
+        
+        // Reset active item effect states each frame
+        playerInvincible = false;
+        dashSpeedMultiplier = 1.0;
+        // Shield persists until used
+        
+        // Handle respawn invincibility timer
+        if (respawnInvincibilityTimer > 0) {
+            respawnInvincibilityTimer -= deltaTime;
+            if (respawnInvincibilityTimer <= 0) {
+                // Timer expired - remove shield and invincibility
+                shieldActive = false;
+                playerInvincible = false;
+            } else {
+                // Still invincible from respawn
+                playerInvincible = true;
+            }
+        }
         
         // Track survival and score (scaled by delta time) - only when player is alive
         if (player != null) {
             gameData.incrementSurvivalTime();
-            gameData.addScore((int)deltaTime);
+            
+            // Apply score multiplier from active item
+            ActiveItem item = gameData.getEquippedItem();
+            int scoreGain = (int)deltaTime;
+            if (item != null && item.getType() == ActiveItem.ItemType.LUCKY_CHARM) {
+                scoreGain = (int)(scoreGain * 1.5); // 50% bonus
+            }
+            gameData.addScore(scoreGain);
+        }
+        
+        // Update active item
+        ActiveItem equippedItem = gameData.getEquippedItem();
+        if (equippedItem != null) {
+            equippedItem.update();
+            
+            // Handle active item effects
+            if (equippedItem.isActive()) {
+                handleActiveItemEffects(equippedItem, deltaTime);
+            } else {
+                // Item just ended - clear shield if it was active
+                if (equippedItem.getType() == ActiveItem.ItemType.SHIELD) {
+                    shieldActive = false;
+                }
+            }
         }
         
         // Update screen shake
@@ -536,7 +710,132 @@ public class Game extends JPanel implements Runnable {
         
         // Update player with delta time (only if alive)
         if (player != null) {
-            player.update(keys, WIDTH, HEIGHT, deltaTime);
+            // Only allow player control when intro pan is complete
+            if (!introPanActive) {
+                player.update(keys, WIDTH, HEIGHT, deltaTime);
+            }
+            
+            // Handle intro sequence
+            if (introPanActive) {
+                introPanTimer += deltaTime;
+                
+                double halfDuration = INTRO_PAN_DURATION / 2.0;
+                if (introPanTimer < halfDuration) {
+                    // Boss entrance animation - fly down from above
+                    double progress = introPanTimer / halfDuration;
+                    double easeProgress = 1 - Math.pow(1 - progress, 3); // Ease out cubic
+                    
+                    // Boss flies down smoothly from -200 to 100
+                    bossEntranceY = -200 + (300 * easeProgress);
+                    if (currentBoss != null) {
+                        // Directly set boss Y position during entrance
+                        currentBoss.setPosition(currentBoss.getX(), bossEntranceY);
+                        
+                        // Add jet trail particles during descent
+                        if (progress > 0.1 && Math.random() < 0.4) {
+                            double angle = Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+                            double speed = 1 + Math.random() * 2;
+                            particles.add(new Particle(
+                                currentBoss.getX() + (Math.random() - 0.5) * 30,
+                                currentBoss.getY() + currentBoss.getSize() / 2,
+                                Math.cos(angle) * speed,
+                                Math.sin(angle) * speed,
+                                new Color(255, 150, 0, 200),
+                                60 + (int)(Math.random() * 30),
+                                8.0 + Math.random() * 8.0,
+                                Particle.ParticleType.TRAIL
+                            ));
+                        }
+                    }
+                    
+                    // Camera follows boss down slightly
+                    double targetY = bossEntranceY * 0.3;
+                    cameraY = targetY;
+                    
+                } else if (introPanTimer < INTRO_PAN_DURATION) {
+                    // Pan back to player (second half)
+                    double progress = (introPanTimer - halfDuration) / halfDuration;
+                    double easeProgress = progress * progress * (3 - 2 * progress); // Smooth ease
+                    
+                    // Boss settles into final position (100)
+                    if (currentBoss != null) {
+                        if (bossEntranceY < 100) {
+                            bossEntranceY += (100 - bossEntranceY) * 0.1;
+                        } else {
+                            bossEntranceY = 100;
+                        }
+                        currentBoss.setPosition(currentBoss.getX(), bossEntranceY);
+                    }
+                    
+                    // Camera pans back to center
+                    double startY = 30.0; // Camera's max Y during boss viewing
+                    cameraY = startY * (1 - easeProgress);
+                    
+                    // Add engine glow particles as boss settles
+                    if (currentBoss != null && Math.random() < 0.15) {
+                        particles.add(new Particle(
+                            currentBoss.getX() + (Math.random() - 0.5) * 40,
+                            currentBoss.getY() + currentBoss.getSize() / 2,
+                            (Math.random() - 0.5) * 0.5,
+                            1 + Math.random() * 1.5,
+                            new Color(100, 150, 255, 180),
+                            40 + (int)(Math.random() * 20),
+                            6.0 + Math.random() * 6.0,
+                            Particle.ParticleType.SPARK
+                        ));
+                    }
+                    
+                } else {
+                    // Entrance complete - add final burst of particles
+                    if (introPanTimer - deltaTime < INTRO_PAN_DURATION) {
+                        // Just finished - add dramatic particle burst
+                        if (currentBoss != null) {
+                            for (int i = 0; i < 20; i++) {
+                                double angle = Math.random() * Math.PI * 2;
+                                double speed = 1 + Math.random() * 3;
+                                particles.add(new Particle(
+                                    currentBoss.getX(),
+                                    currentBoss.getY(),
+                                    Math.cos(angle) * speed,
+                                    Math.sin(angle) * speed,
+                                    new Color(255, 200, 100, 200),
+                                    30 + (int)(Math.random() * 30),
+                                    10.0 + Math.random() * 10.0,
+                                    Particle.ParticleType.EXPLOSION
+                                ));
+                            }
+                        }
+                    }
+                    
+                    introPanActive = false;
+                    cameraX = 0;
+                    cameraY = 0;
+                }
+            } else {
+                // Normal camera follow with slow smooth interpolation (only when intro is done)
+                double targetCameraX = 0;
+                double targetCameraY = 0;
+                
+                // Calculate offset from screen center
+                double offsetX = player.getX() - WIDTH / 2;
+                double offsetY = player.getY() - HEIGHT / 2;
+                
+                // Only move camera if player is outside deadzone
+                if (Math.abs(offsetX) > CAMERA_DEADZONE) {
+                    targetCameraX = offsetX - Math.signum(offsetX) * CAMERA_DEADZONE;
+                }
+                if (Math.abs(offsetY) > CAMERA_DEADZONE) {
+                    targetCameraY = offsetY - Math.signum(offsetY) * CAMERA_DEADZONE;
+                }
+                
+                // Smoothly interpolate camera position (slower than before)
+                cameraX += (targetCameraX - cameraX) * CAMERA_SMOOTHING;
+                cameraY += (targetCameraY - cameraY) * CAMERA_SMOOTHING;
+                
+                // Clamp camera to max offset from center
+                cameraX = Math.max(-CAMERA_MAX_OFFSET, Math.min(CAMERA_MAX_OFFSET, cameraX));
+                cameraY = Math.max(-CAMERA_MAX_OFFSET, Math.min(CAMERA_MAX_OFFSET, cameraY));
+            }
             
             // Spawn fire trail behind player
             if (Game.enableParticles) {
@@ -593,29 +892,19 @@ public class Game extends JPanel implements Runnable {
             if (bossVulnerable) {
                 // TODO: Play sound effect - boss_hit.wav
                 
-                // Successful hit! Start death animation
-                int winBonus = 1000 + (gameData.getCurrentLevel() * 500) + (dodgeCombo * 100);
-                gameData.addScore(winBonus);
+                // Increment hit counter
+                bossHitCount++;
                 
-                // Add money reward based on boss type
-                int moneyReward = currentBoss.getMoneyReward();
-                gameData.addRunMoney(moneyReward);
-                gameData.addTotalMoney(moneyReward);
-                
-                // Start boss death animation
-                bossDeathAnimation = true;
-                deathAnimationTimer = DEATH_ANIMATION_DURATION;
-                bossDeathScale = 1.0;
-                bossDeathRotation = 0;
-                bossKillTime = gameTimeSeconds; // Record time when boss was killed
+                // Progressive damage effects - more smoke and fire with each hit
+                int particleMultiplier = bossHitCount; // 1x, 2x, 3x particles
                 
                 // Create impact particles at collision point (between player and boss)
                 if (enableParticles) {
                     double impactX = (player.getX() + currentBoss.getX()) / 2;
                     double impactY = (player.getY() + currentBoss.getY()) / 2;
                     
-                    // Bright white/yellow impact flash
-                    for (int i = 0; i < 30; i++) {
+                    // Bright white/yellow impact flash (scales with hit count)
+                    for (int i = 0; i < 30 * particleMultiplier; i++) {
                         double angle = Math.random() * TWO_PI;
                         double speed = 2 + Math.random() * 6;
                         Color impactColor = Math.random() < 0.5 ? IMPACT_WHITE : IMPACT_YELLOW;
@@ -627,21 +916,134 @@ public class Game extends JPanel implements Runnable {
                         );
                     }
                     
-                    // Impact shockwave rings
-                    for (int i = 0; i < 3; i++) {
+                    // Smoke particles (more with each hit)
+                    for (int i = 0; i < 15 * particleMultiplier; i++) {
+                        double angle = Math.random() * TWO_PI;
+                        double speed = 0.5 + Math.random() * 2;
+                        addParticle(
+                            currentBoss.getX(), currentBoss.getY(),
+                            Math.cos(angle) * speed, Math.sin(angle) * speed,
+                            new Color(80, 80, 80, 150), 40, 8,
+                            Particle.ParticleType.SPARK
+                        );
+                    }
+                    
+                    // Fire particles (more with each hit)
+                    for (int i = 0; i < 20 * particleMultiplier; i++) {
+                        double angle = Math.random() * TWO_PI;
+                        double speed = 1 + Math.random() * 4;
+                        Color fireColor = Math.random() < 0.5 ? BOSS_FIRE : BOSS_FIRE_BRIGHT;
+                        addParticle(
+                            currentBoss.getX(), currentBoss.getY(),
+                            Math.cos(angle) * speed, Math.sin(angle) * speed,
+                            fireColor, 30, 5,
+                            Particle.ParticleType.SPARK
+                        );
+                    }
+                    
+                    // Metal debris particles (visual damage on plane)
+                    for (int i = 0; i < 25 * particleMultiplier; i++) {
+                        double angle = Math.random() * TWO_PI;
+                        double speed = 2 + Math.random() * 5;
+                        Color debrisColor = new Color(160, 160, 170, 200);
+                        addParticle(
+                            currentBoss.getX(), currentBoss.getY(),
+                            Math.cos(angle) * speed, Math.sin(angle) * speed,
+                            debrisColor, 25, 4,
+                            Particle.ParticleType.SPARK
+                        );
+                    }
+                    
+                    // Sparks from plane damage
+                    for (int i = 0; i < 30 * particleMultiplier; i++) {
+                        double angle = Math.random() * TWO_PI;
+                        double speed = 3 + Math.random() * 6;
+                        Color sparkColor = new Color(255, 220, 100, 220);
+                        addParticle(
+                            currentBoss.getX(), currentBoss.getY(),
+                            Math.cos(angle) * speed, Math.sin(angle) * speed,
+                            sparkColor, 20, 3,
+                            Particle.ParticleType.SPARK
+                        );
+                    }
+                    
+                    // Large explosion rings at impact (scales with hits)
+                    for (int i = 0; i < 5; i++) {
                         addParticle(
                             impactX, impactY, 0, 0,
-                            new Color(255, 255, 200, 200 - i * 60), 25 + i * 8, 30 + i * 20,
+                            new Color(255, 150 - i * 20, 50, 220 - i * 40), 
+                            40 + i * 10, 
+                            40 + i * 25 + (particleMultiplier * 10),
                             Particle.ParticleType.EXPLOSION
                         );
                     }
                 }
                 
-                // Make player disappear (missile hit)
-                player = null;
+                // Respawn player at bottom with shield
+                player = new Player(WIDTH / 2, HEIGHT - 200, gameData.getActiveSpeedLevel());
+                shieldActive = true;
+                playerInvincible = true;
+                respawnInvincibilityTimer = 180; // 3 seconds of invincibility after respawn
                 
-                // Initial massive explosion
-                screenShakeIntensity = 25;
+                // Add respawn flash effect
+                if (enableParticles) {
+                    // Bright spawn flash at new player position
+                    for (int i = 0; i < 60; i++) {
+                        double angle = Math.random() * TWO_PI;
+                        double speed = 3 + Math.random() * 7;
+                        Color spawnColor = new Color(100, 200, 255, 220);
+                        addParticle(
+                            WIDTH / 2, HEIGHT - 200,
+                            Math.cos(angle) * speed, Math.sin(angle) * speed,
+                            spawnColor, 35, 12,
+                            Particle.ParticleType.SPARK
+                        );
+                    }
+                    // Shield activation rings
+                    for (int i = 0; i < 4; i++) {
+                        addParticle(
+                            WIDTH / 2, HEIGHT - 200, 0, 0,
+                            new Color(136, 192, 208, 220 - i * 45), 40 + i * 12, 35 + i * 20,
+                            Particle.ParticleType.EXPLOSION
+                        );
+                    }
+                }
+                
+                // Reset vulnerability
+                bossVulnerable = false;
+                invulnerabilityTimer = 90; // 1.5 seconds before next vulnerability window
+                
+                screenShakeIntensity = 20 + (bossHitCount * 8); // More shake with each hit
+                
+                // Check if boss is defeated (2 hits for mini, 3 for mega)
+                int maxHits = currentBoss.isMegaBoss() ? 3 : 2;
+                if (bossHitCount >= maxHits) {
+                    // Award points and money
+                    int winBonus = 1000 + (gameData.getCurrentLevel() * 500) + (dodgeCombo * 100);
+                    gameData.addScore(winBonus);
+                    
+                    int moneyReward = currentBoss.getMoneyReward();
+                    
+                    // Apply LUCKY_CHARM multiplier if equipped
+                    if (equippedItem != null && equippedItem.getType() == ActiveItem.ItemType.LUCKY_CHARM) {
+                        moneyReward = (int)(moneyReward * 1.5); // 50% bonus
+                    }
+                    
+                    gameData.addRunMoney(moneyReward);
+                    gameData.addTotalMoney(moneyReward);
+                    
+                    // Start boss death animation
+                    bossDeathAnimation = true;
+                    deathAnimationTimer = DEATH_ANIMATION_DURATION;
+                    bossDeathScale = 1.0;
+                    bossDeathRotation = 0;
+                    bossKillTime = gameTimeSeconds;
+                    
+                    // Make player disappear (missile hit)
+                    player = null;
+                    
+                    // Massive final explosion
+                    screenShakeIntensity = 25;
                 
                 // Create massive fiery explosion particles
                 int explosionParticleCount = bullets.size() > 200 ? 50 : 100; // Reduce at high bullet density
@@ -673,6 +1075,7 @@ public class Game extends JPanel implements Runnable {
                         Particle.ParticleType.EXPLOSION
                     );
                 }
+                } // End of if (bossHitCount >= BOSS_MAX_HITS)
                 
                 return;
             } else {
@@ -745,6 +1148,24 @@ public class Game extends JPanel implements Runnable {
                 }
                 
                 screenShakeIntensity = 20;
+                
+                // Check if this is a mega boss (every 3rd level)
+                int currentLevel = gameData.getCurrentLevel();
+                if (currentLevel % 3 == 0 && !gameData.getDefeatedBosses()[currentLevel - 1]) {
+                    // Unlock item before transitioning
+                    gameData.unlockNextItem();
+                    if (gameData.getUnlockedItems().size() == 1) {
+                        gameData.equipItem(0);
+                    }
+                    // Trigger animation
+                    itemUnlockAnimation = true;
+                    itemUnlockTimer = ITEM_UNLOCK_DURATION;
+                    ActiveItem newItem = gameData.getEquippedItem();
+                    if (newItem != null) {
+                        unlockedItemName = newItem.getName();
+                    }
+                }
+                
                 gameState = GameState.WIN;
                 bossDeathAnimation = false;
                 return;
@@ -800,8 +1221,8 @@ public class Game extends JPanel implements Runnable {
             }
         }
         
-        // Update boss with delta time (but not during death animation)
-        if (currentBoss != null && !bossDeathAnimation) {
+        // Update boss with delta time (but not during death animation or intro)
+        if (currentBoss != null && !bossDeathAnimation && !introPanActive) {
             currentBoss.update(bullets, player, WIDTH, HEIGHT, deltaTime, particles);
             beamAttacks = currentBoss.getBeamAttacks();
         }
@@ -836,6 +1257,12 @@ public class Game extends JPanel implements Runnable {
             // Apply bullet slow upgrade (reduced to 0.1% per level)
             if (gameData.getActiveBulletSlowLevel() > 0) {
                 bullet.applySlow(0.999 - (gameData.getActiveBulletSlowLevel() * 0.0001));
+            }
+            
+            // Apply time slow from active item
+            if (equippedItem != null && equippedItem.isActive() && 
+                equippedItem.getType() == ActiveItem.ItemType.TIME_SLOW) {
+                bullet.applySlow(0.5); // 50% speed
             }
             
             bullet.update(player, WIDTH, HEIGHT, deltaTime);
@@ -902,6 +1329,37 @@ public class Game extends JPanel implements Runnable {
             List<Bullet> nearbyBullets = getNearbyBullets(player.getX(), player.getY());
             for (Bullet bullet : nearbyBullets) {
                 if (bullet.isActive() && bullet.collidesWith(player)) {
+                    // Check for active item invincibility (DASH or INVINCIBILITY)
+                    if (playerInvincible) {
+                        // Invincible - bullets pass through
+                        continue;
+                    }
+                    
+                    // Check for shield
+                    if (shieldActive) {
+                        // Shield blocks the hit
+                        shieldActive = false;
+                        bullets.remove(bullet);
+                        returnBulletToPool(bullet);
+                        
+                        // Create shield break particles
+                        if (enableParticles) {
+                            for (int j = 0; j < 15; j++) {
+                                double angle = Math.random() * TWO_PI;
+                                double speed = 2 + Math.random() * 4;
+                                addParticle(
+                                    player.getX(), player.getY(),
+                                    Math.cos(angle) * speed, Math.sin(angle) * speed,
+                                    new Color(136, 192, 208), 25, 6,
+                                    Particle.ParticleType.SPARK
+                                );
+                            }
+                        }
+                        
+                        screenShakeIntensity = 5;
+                        continue;
+                    }
+                    
                     // Lucky Dodge chance - phase through bullets
                     int luckyDodgeLevel = gameData.getActiveLuckyDodgeLevel();
                     if (luckyDodgeLevel > 0) {
@@ -1038,7 +1496,25 @@ public class Game extends JPanel implements Runnable {
         Graphics2D g2d = (Graphics2D) g;
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         
-        switch (gameState) {
+        // Draw previous state if transitioning
+        if (stateTransitionProgress < 1.0f && previousState != null) {
+            // Draw old state with fade out
+            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f - stateTransitionProgress));
+            drawState(g2d, previousState);
+            
+            // Draw new state with fade in
+            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, stateTransitionProgress));
+            drawState(g2d, gameState);
+            
+            // Reset composite
+            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+        } else {
+            drawState(g2d, gameState);
+        }
+    }
+    
+    private void drawState(Graphics2D g2d, GameState state) {
+        switch (state) {
             case MENU:
                 renderer.drawMenu(g2d, WIDTH, HEIGHT, gradientTime, escapeTimer, selectedMenuItem);
                 break;
@@ -1058,7 +1534,7 @@ public class Game extends JPanel implements Runnable {
             case PLAYING:
                 // Apply screen shake
                 g2d.translate(screenShakeX, screenShakeY);
-                renderer.drawGame(g2d, WIDTH, HEIGHT, player, currentBoss, bullets, particles, beamAttacks, gameData.getCurrentLevel(), gradientTime, bossVulnerable, vulnerabilityTimer, dodgeCombo, comboTimer > 0, bossDeathAnimation, bossDeathScale, bossDeathRotation, gameTimeSeconds, currentFPS);
+                renderer.drawGame(g2d, WIDTH, HEIGHT, player, currentBoss, bullets, particles, beamAttacks, gameData.getCurrentLevel(), gradientTime, bossVulnerable, vulnerabilityTimer, dodgeCombo, comboTimer > 0, bossDeathAnimation, bossDeathScale, bossDeathRotation, gameTimeSeconds, currentFPS, shieldActive, playerInvincible, bossHitCount, cameraX, cameraY);
                 g2d.translate(-screenShakeX, -screenShakeY);
                 break;
             case LOADING:
@@ -1070,6 +1546,10 @@ public class Game extends JPanel implements Runnable {
                 break;
             case WIN:
                 renderer.drawWin(g2d, WIDTH, HEIGHT, gradientTime, bossKillTime);
+                // Draw item unlock animation if active
+                if (itemUnlockAnimation) {
+                    drawItemUnlockAnimation(g2d, WIDTH, HEIGHT);
+                }
                 break;
             case SHOP:
                 renderer.drawShop(g2d, WIDTH, HEIGHT, gradientTime);
@@ -1077,6 +1557,15 @@ public class Game extends JPanel implements Runnable {
             case DEBUG:
                 renderer.drawDebug(g2d, WIDTH, HEIGHT, gradientTime);
                 break;
+        }
+    }
+    
+    // Helper method to transition to a new state
+    private void transitionToState(GameState newState) {
+        if (gameState != newState) {
+            previousState = gameState;
+            gameState = newState;
+            stateTransitionProgress = 0.0f;
         }
     }
     
@@ -1133,17 +1622,17 @@ public class Game extends JPanel implements Runnable {
     private void startAssetLoading() {
         Thread loadingThread = new Thread(() -> {
             try {
-                loadingProgress = 10;
+                targetLoadingProgress = 10;
                 repaint();
                 
                 // Create renderer (this loads backgrounds and overlay)
                 renderer = new Renderer(gameData, shopManager);
-                loadingProgress = 80;
+                targetLoadingProgress = 80;
                 repaint();
                 
                 // Small delay to ensure everything is ready
                 Thread.sleep(200);
-                loadingProgress = 100;
+                targetLoadingProgress = 100;
                 repaint();
                 
                 // Wait a moment then switch to menu
@@ -1164,6 +1653,11 @@ public class Game extends JPanel implements Runnable {
     }
     
     private void drawSimpleLoading(Graphics2D g, int width, int height, int progress) {
+        // Smooth interpolation of progress
+        double smoothSpeed = 0.15; // Higher = faster interpolation
+        displayedLoadingProgress += (targetLoadingProgress - displayedLoadingProgress) * smoothSpeed;
+        int smoothProgress = (int)displayedLoadingProgress;
+        
         // Simple loading screen without renderer
         g.setColor(new Color(30, 30, 40));
         g.fillRect(0, 0, width, height);
@@ -1177,11 +1671,12 @@ public class Game extends JPanel implements Runnable {
         int titleY = height / 2 - 100;
         g.drawString(title, titleX, titleY);
         
-        // Loading text
+        // Loading text with animated dots
         g.setFont(new Font("Arial", Font.PLAIN, 24));
-        String loadingText = "Loading...";
+        int dotCount = (int)((System.currentTimeMillis() / 300) % 4);
+        String loadingText = "Loading" + ".".repeat(dotCount);
         fm = g.getFontMetrics();
-        g.drawString(loadingText, (width - fm.stringWidth(loadingText)) / 2, height / 2 + 20);
+        g.drawString(loadingText, (width - fm.stringWidth("Loading...")) / 2, height / 2 + 20);
         
         // Progress bar
         int barWidth = 400;
@@ -1193,11 +1688,28 @@ public class Game extends JPanel implements Runnable {
         g.setColor(new Color(60, 60, 70));
         g.fillRoundRect(barX, barY, barWidth, barHeight, 15, 15);
         
-        // Progress fill
-        int fillWidth = (int)(barWidth * (progress / 100.0));
+        // Progress fill with smooth animation
+        int fillWidth = (int)(barWidth * (smoothProgress / 100.0));
         if (fillWidth > 0) {
-            g.setColor(new Color(136, 192, 208));
+            // Animated glow effect
+            double glowPulse = Math.sin(System.currentTimeMillis() / 200.0) * 0.2 + 0.8;
+            int r = (int)(136 * glowPulse);
+            int gb = (int)(192 * glowPulse);
+            int b = (int)(208 * glowPulse);
+            g.setColor(new Color(r, gb, b));
             g.fillRoundRect(barX, barY, fillWidth, barHeight, 15, 15);
+            
+            // Brighter leading edge
+            if (smoothProgress < 100) {
+                int edgeWidth = 20;
+                int edgeX = Math.max(barX, barX + fillWidth - edgeWidth);
+                GradientPaint edgeGlow = new GradientPaint(
+                    edgeX, barY, new Color(255, 255, 255, 100),
+                    edgeX + edgeWidth, barY, new Color(136, 192, 208, 0)
+                );
+                g.setPaint(edgeGlow);
+                g.fillRoundRect(edgeX, barY, Math.min(edgeWidth, fillWidth), barHeight, 15, 15);
+            }
         }
         
         // Border
@@ -1208,8 +1720,315 @@ public class Game extends JPanel implements Runnable {
         // Percentage
         g.setColor(Color.WHITE);
         g.setFont(new Font("Arial", Font.BOLD, 18));
-        String percentText = progress + "%";
+        String percentText = smoothProgress + "%";
         fm = g.getFontMetrics();
         g.drawString(percentText, (width - fm.stringWidth(percentText)) / 2, barY + barHeight + 30);
+    }
+    
+    // Handle active item effects during gameplay
+    private void handleActiveItemEffects(ActiveItem item, double deltaTime) {
+        switch (item.getType()) {
+            case DASH:
+                // Apply speed boost and invincibility during dash
+                playerInvincible = true;
+                dashSpeedMultiplier = 5.0;
+                if (player != null) {
+                    player.applyDashBoost(dashSpeedMultiplier);
+                }
+                break;
+                
+            case SHOCKWAVE:
+                // Push all bullets away from player (instant effect)
+                if (player != null) {
+                    for (Bullet bullet : bullets) {
+                        double dx = bullet.getX() - player.getX();
+                        double dy = bullet.getY() - player.getY();
+                        double distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < 300) { // Shockwave radius
+                            // Push bullet away
+                            double angle = Math.atan2(dy, dx);
+                            double pushForce = 10 * (1.0 - distance / 300);
+                            bullet.applyForce(Math.cos(angle) * pushForce, Math.sin(angle) * pushForce);
+                        }
+                    }
+                    
+                    // Create shockwave particles
+                    if (enableParticles) {
+                        for (int i = 0; i < 30; i++) {
+                            double angle = Math.random() * TWO_PI;
+                            double speed = 5 + Math.random() * 5;
+                            addParticle(
+                                player.getX(), player.getY(),
+                                Math.cos(angle) * speed, Math.sin(angle) * speed,
+                                new Color(163, 190, 140), 30, 8,
+                                Particle.ParticleType.SPARK
+                            );
+                        }
+                    }
+                    
+                    screenShakeIntensity = 8;
+                }
+                break;
+                
+            case SHIELD:
+                // Shield is active - will tank next hit
+                shieldActive = true;
+                break;
+                
+            case BOMB:
+                // Clear all bullets (instant effect)
+                int clearedBullets = bullets.size();
+                for (Bullet bullet : bullets) {
+                    returnBulletToPool(bullet);
+                }
+                bullets.clear();
+                
+                // Award score for cleared bullets
+                gameData.addScore(clearedBullets * 5);
+                
+                // Create massive explosion effect
+                if (enableParticles && player != null) {
+                    for (int i = 0; i < 50; i++) {
+                        double angle = Math.random() * TWO_PI;
+                        double speed = 3 + Math.random() * 8;
+                        Color fireColor = Math.random() < 0.5 ? FIRE_ORANGE : FIRE_YELLOW;
+                        addParticle(
+                            player.getX(), player.getY(),
+                            Math.cos(angle) * speed, Math.sin(angle) * speed,
+                            fireColor, 40, 8,
+                            Particle.ParticleType.SPARK
+                        );
+                    }
+                }
+                
+                screenShakeIntensity = 15;
+                break;
+                
+            case MAGNET:
+                // Pull nearby bullets toward player for scoring
+                if (player != null) {
+                    for (Bullet bullet : bullets) {
+                        double dx = player.getX() - bullet.getX();
+                        double dy = player.getY() - bullet.getY();
+                        double distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < 400) { // Magnet radius
+                            double angle = Math.atan2(dy, dx);
+                            double pullForce = 0.5 * (1.0 - distance / 400);
+                            bullet.applyForce(Math.cos(angle) * pullForce, Math.sin(angle) * pullForce);
+                        }
+                    }
+                }
+                break;
+                
+            case TIME_SLOW:
+                // Bullets move at 50% speed (applied in bullet update loop)
+                // This effect is checked in the bullet collision section
+                break;
+                
+            case LASER_BEAM:
+                // Fire a damaging laser beam upward
+                // Damage bullets in path
+                if (player != null) {
+                    double laserX = player.getX();
+                    double laserWidth = 40;
+                    
+                    for (int i = bullets.size() - 1; i >= 0; i--) {
+                        Bullet bullet = bullets.get(i);
+                        double bulletX = bullet.getX();
+                        double bulletY = bullet.getY();
+                        
+                        // Check if bullet is in laser path
+                        if (Math.abs(bulletX - laserX) < laserWidth / 2 && bulletY < player.getY()) {
+                            bullets.remove(i);
+                            returnBulletToPool(bullet);
+                            gameData.addScore(10);
+                            
+                            // Create destruction particles
+                            if (enableParticles) {
+                                for (int j = 0; j < 5; j++) {
+                                    double angle = Math.random() * TWO_PI;
+                                    double speed = 1 + Math.random() * 3;
+                                    addParticle(
+                                        bulletX, bulletY,
+                                        Math.cos(angle) * speed, Math.sin(angle) * speed,
+                                        new Color(235, 203, 139), 15, 4,
+                                        Particle.ParticleType.SPARK
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                break;
+                
+            case INVINCIBILITY:
+                // Player is invincible
+                playerInvincible = true;
+                break;
+                
+            default:
+                break;
+        }
+    }
+    
+    private void drawItemUnlockAnimation(Graphics2D g, int width, int height) {
+        // Calculate animation progress (0.0 to 1.0)
+        float progress = 1.0f - ((float) itemUnlockTimer / ITEM_UNLOCK_DURATION);
+        
+        // Calculate dismiss progress (1.0 = visible, 0.0 = gone)
+        float dismissMultiplier = 1.0f;
+        if (itemUnlockDismissing) {
+            dismissMultiplier = (float) itemUnlockDismissTimer / ITEM_DISMISS_DURATION;
+        }
+        
+        // Full dark overlay with fade
+        int overlayAlpha = (int)(200 * Math.min(progress * 2, 1.0f) * dismissMultiplier);
+        g.setColor(new Color(0, 0, 0, Math.min(overlayAlpha, 200)));
+        g.fillRect(0, 0, width, height);
+        
+        // Calculate position (slide up from bottom, slide down when dismissing)
+        int centerX = width / 2;
+        int startY = height + 300;
+        int endY = height / 2;
+        int dismissOffset = (int)((1.0f - dismissMultiplier) * 400); // Slide down when dismissing
+        int currentY = (int)(startY + (endY - startY) * Math.pow(progress, 0.7)) + dismissOffset;
+        
+        // Scale effect (start small, grow to full size, shrink when dismissing)
+        float scale;
+        if (progress < 0.4f) {
+            scale = (float)Math.pow(progress / 0.4f, 0.5); // Smooth growth
+        } else {
+            scale = 1.0f;
+        }
+        scale *= dismissMultiplier; // Shrink during dismiss
+        
+        // Multiple glow layers for more impact
+        for (int i = 0; i < 3; i++) {
+            int glowSize = Math.max(1, (int)((500 + i * 100) * scale)); // Ensure radius is at least 1
+            float pulseSpeed = 2.0f + i * 0.5f;
+            float pulse = (float)Math.abs(Math.sin(System.currentTimeMillis() / 200.0 * pulseSpeed)) * 0.3f + 0.7f;
+            
+            RadialGradientPaint glowPaint = new RadialGradientPaint(
+                centerX, currentY,
+                glowSize,
+                new float[]{0.0f, 0.6f, 1.0f},
+                new Color[]{
+                    new Color(235, 203, 139, (int)(80 * scale * pulse * dismissMultiplier)),
+                    new Color(163, 190, 140, (int)(40 * scale * pulse * dismissMultiplier)),
+                    new Color(163, 190, 140, 0)
+                }
+            );
+            g.setPaint(glowPaint);
+            g.fillOval(centerX - glowSize, currentY - glowSize, glowSize * 2, glowSize * 2);
+        }
+        
+        // Animated particles around the box
+        if (progress > 0.3f && enableParticles) {
+            int particleCount = 30;
+            for (int i = 0; i < particleCount; i++) {
+                double angle = (System.currentTimeMillis() / 50.0 + i * (360.0 / particleCount)) * Math.PI / 180.0;
+                int radius = (int)(200 * scale);
+                int px = (int)(centerX + Math.cos(angle) * radius);
+                int py = (int)(currentY + Math.sin(angle) * radius * 0.7);
+                int size = (int)(6 * scale);
+                
+                float particleAlpha = (float)Math.abs(Math.sin(angle * 3 + System.currentTimeMillis() / 100.0));
+                g.setColor(new Color(235, 203, 139, (int)(200 * particleAlpha * scale * dismissMultiplier)));
+                g.fillOval(px - size/2, py - size/2, size, size);
+            }
+        }
+        
+        // Draw box with better styling
+        int boxWidth = (int)(700 * scale);
+        int boxHeight = (int)(280 * scale);
+        int boxX = centerX - boxWidth / 2;
+        int boxY = currentY - boxHeight / 2;
+        
+        // Box shadow
+        g.setColor(new Color(0, 0, 0, (int)(100 * Math.min(progress * 2, 1.0f))));
+        g.fillRoundRect(boxX + 5, boxY + 5, boxWidth, boxHeight, 25, 25);
+        
+        // Box background with gradient
+        GradientPaint boxGradient = new GradientPaint(
+            boxX, boxY, new Color(40, 40, 50, (int)(240 * Math.min(progress * 2, 1.0f))),
+            boxX, boxY + boxHeight, new Color(25, 25, 35, (int)(240 * Math.min(progress * 2, 1.0f)))
+        );
+        g.setPaint(boxGradient);
+        g.fillRoundRect(boxX, boxY, boxWidth, boxHeight, 25, 25);
+        
+        // Animated border with rainbow glow
+        float borderPulse = (float)Math.abs(Math.sin(System.currentTimeMillis() / 150.0));
+        int borderR = (int)(163 + (235 - 163) * borderPulse);
+        int borderG = (int)(190 + (203 - 190) * borderPulse);
+        int borderB = (int)(140 + (139 - 140) * borderPulse);
+        g.setColor(new Color(borderR, borderG, borderB, (int)(255 * Math.min(progress * 2, 1.0f))));
+        g.setStroke(new BasicStroke(5));
+        g.drawRoundRect(boxX, boxY, boxWidth, boxHeight, 25, 25);
+        
+        // Inner glow border
+        g.setColor(new Color(255, 255, 255, (int)(100 * borderPulse * Math.min(progress * 2, 1.0f))));
+        g.setStroke(new BasicStroke(2));
+        g.drawRoundRect(boxX + 8, boxY + 8, boxWidth - 16, boxHeight - 16, 20, 20);
+        
+        // Text content
+        if (progress > 0.25f) {
+            float textAlpha = Math.min((progress - 0.25f) / 0.3f, 1.0f) * dismissMultiplier;
+            
+            // "NEW ITEM UNLOCKED!" with shadow
+            g.setFont(new Font("Arial", Font.BOLD, (int)(56 * scale)));
+            String titleText = "NEW ITEM UNLOCKED!";
+            FontMetrics titleFm = g.getFontMetrics();
+            int titleX = centerX - titleFm.stringWidth(titleText) / 2;
+            int titleY = currentY - (int)(80 * scale);
+            
+            // Title shadow
+            g.setColor(new Color(0, 0, 0, (int)(150 * textAlpha)));
+            g.drawString(titleText, titleX + 2, titleY + 2);
+            
+            // Title text with pulse
+            float titlePulse = (float)Math.abs(Math.sin(System.currentTimeMillis() / 200.0)) * 0.3f + 0.7f;
+            g.setColor(new Color(235, 203, 139, (int)(255 * textAlpha * titlePulse)));
+            g.drawString(titleText, titleX, titleY);
+            
+            // Item name with shadow
+            g.setFont(new Font("Arial", Font.BOLD, (int)(44 * scale)));
+            FontMetrics itemFm = g.getFontMetrics();
+            int itemX = centerX - itemFm.stringWidth(unlockedItemName) / 2;
+            int itemY = currentY - (int)(10 * scale);
+            
+            g.setColor(new Color(0, 0, 0, (int)(150 * textAlpha)));
+            g.drawString(unlockedItemName, itemX + 2, itemY + 2);
+            
+            g.setColor(new Color(163, 190, 140, (int)(255 * textAlpha)));
+            g.drawString(unlockedItemName, itemX, itemY);
+            
+            // Item description
+            ActiveItem currentItem = gameData.getEquippedItem();
+            if (currentItem != null && progress > 0.4f) {
+                g.setFont(new Font("Arial", Font.PLAIN, (int)(24 * scale)));
+                String description = currentItem.getDescription();
+                FontMetrics descFm = g.getFontMetrics();
+                int descX = centerX - descFm.stringWidth(description) / 2;
+                int descY = currentY + (int)(50 * scale);
+                
+                g.setColor(new Color(200, 200, 200, (int)(220 * textAlpha)));
+                g.drawString(description, descX, descY);
+            }
+            
+            // "Press SPACE to continue" hint
+            if (progress > 0.8f) {
+                g.setFont(new Font("Arial", Font.PLAIN, (int)(20 * scale)));
+                String hintText = "Press SPACE to continue";
+                FontMetrics hintFm = g.getFontMetrics();
+                int hintX = centerX - hintFm.stringWidth(hintText) / 2;
+                int hintY = currentY + (int)(100 * scale);
+                
+                float hintPulse = (float)Math.abs(Math.sin(System.currentTimeMillis() / 300.0));
+                g.setColor(new Color(150, 150, 150, (int)(200 * hintPulse)));
+                g.drawString(hintText, hintX, hintY);
+            }
+        }
     }
 }

@@ -1,7 +1,9 @@
 import java.awt.*;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import javax.imageio.ImageIO;
 
@@ -36,11 +38,11 @@ public class Renderer {
         
         // Initialize menu buttons (positions will be updated in drawMenu)
         menuButtons = new UIButton[5];
-        menuButtons[0] = new UIButton("Select Level", 0, 0, 300, 50, new Color(143, 188, 187), new Color(163, 190, 140));
-        menuButtons[1] = new UIButton("Game Info", 0, 0, 300, 50, new Color(136, 192, 208), new Color(163, 190, 140));
-        menuButtons[2] = new UIButton("Stats & Loadout", 0, 0, 300, 50, new Color(180, 142, 173), new Color(163, 190, 140));
-        menuButtons[3] = new UIButton("Shop", 0, 0, 300, 50, new Color(235, 203, 139), new Color(163, 190, 140));
-        menuButtons[4] = new UIButton("Settings", 0, 0, 300, 50, new Color(191, 97, 106), new Color(163, 190, 140));
+        menuButtons[0] = new UIButton("Select Level", 0, 0, 300, 50, new Color(191, 97, 106), new Color(220, 120, 130)); // Red
+        menuButtons[1] = new UIButton("Game Info", 0, 0, 300, 50, new Color(191, 97, 106), new Color(220, 120, 130)); // Red
+        menuButtons[2] = new UIButton("Stats & Loadout", 0, 0, 300, 50, new Color(191, 97, 106), new Color(220, 120, 130)); // Red
+        menuButtons[3] = new UIButton("Shop", 0, 0, 300, 50, new Color(191, 97, 106), new Color(220, 120, 130)); // Red
+        menuButtons[4] = new UIButton("Settings", 0, 0, 300, 50, new Color(191, 97, 106), new Color(220, 120, 130)); // Red
         
         // Initialize shop buttons (7 items)
         shopButtons = new UIButton[7];
@@ -48,11 +50,11 @@ public class Renderer {
             shopButtons[i] = new UIButton("", 0, 0, 800, 50, new Color(76, 86, 106), new Color(180, 142, 173));
         }
         
-        // Initialize stats buttons (4 upgrades)
-        statsButtons = new UIButton[4];
-        String[] statNames = {"Speed Boost", "Bullet Slow", "Lucky Dodge", "Attack Window+"};
-        Color[] statColors = {new Color(143, 188, 187), new Color(136, 192, 208), new Color(180, 142, 173), new Color(235, 203, 139)};
-        for (int i = 0; i < 4; i++) {
+        // Initialize stats buttons (5 items: 4 upgrades + active item)
+        statsButtons = new UIButton[5];
+        String[] statNames = {"Speed Boost", "Bullet Slow", "Lucky Dodge", "Attack Window+", "Active Item"};
+        Color[] statColors = {new Color(143, 188, 187), new Color(136, 192, 208), new Color(180, 142, 173), new Color(235, 203, 139), new Color(163, 190, 140)};
+        for (int i = 0; i < 5; i++) {
             statsButtons[i] = new UIButton(statNames[i], 0, 0, 840, 70, new Color(59, 66, 82), statColors[i]);
         }
         
@@ -298,8 +300,8 @@ public class Renderer {
         
         // Gradient text effect
         GradientPaint titleGrad = new GradientPaint(
-            titleX, titleY - 50, new Color(143, 188, 187), // Palette teal
-            titleX, titleY + 20, new Color(136, 192, 208) // Palette cyan
+            titleX, titleY - 50, new Color(191, 97, 106), // Red
+            titleX, titleY + 20, new Color(220, 120, 130) // Lighter red
         );
         g.setPaint(titleGrad);
         g.drawString(title, titleX, titleY);
@@ -321,7 +323,7 @@ public class Renderer {
         }
         
         // Show money
-        g.setColor(new Color(163, 190, 140)); // Palette green
+        g.setColor(new Color(191, 97, 106)); // Red
         g.setFont(new Font("Arial", Font.BOLD, 32));
         String money = "Money: $" + gameData.getTotalMoney();
         fm = g.getFontMetrics();
@@ -480,11 +482,66 @@ public class Renderer {
     }
     
     public void drawStatsUpgrades(Graphics2D g, int width, int selectedStatItem) {
-        String[] upgradeNames = {"Speed Boost", "Bullet Slow", "Lucky Dodge", "Attack Window+"};
+        String[] upgradeNames = {"Speed Boost", "Bullet Slow", "Lucky Dodge", "Attack Window+", "Active Item"};
         
         int y = 340;
         for (int i = 0; i < upgradeNames.length; i++) {
             boolean isSelected = i == selectedStatItem;
+            
+            // Special handling for Active Item (index 4)
+            if (i == 4) {
+                // Draw active item selection box
+                g.setColor(new Color(40, 40, 40));
+                g.fillRoundRect(width / 2 - 410, y - 30, 820, 70, 15, 15);
+                
+                // Selection indicator
+                if (isSelected) {
+                    g.setColor(new Color(235, 203, 139));
+                    g.setStroke(new BasicStroke(3));
+                    g.drawRoundRect(width / 2 - 410, y - 30, 820, 70, 15, 15);
+                } else {
+                    g.setColor(new Color(100, 100, 100));
+                    g.setStroke(new BasicStroke(1));
+                    g.drawRoundRect(width / 2 - 410, y - 30, 820, 70, 15, 15);
+                }
+                
+                // Draw label
+                g.setColor(Color.WHITE);
+                g.setFont(new Font("Arial", Font.BOLD, 26));
+                g.drawString("Active Item:", width / 2 - 390, y);
+                
+                // Draw current item or status
+                if (gameData.hasActiveItems()) {
+                    ActiveItem equippedItem = gameData.getEquippedItem();
+                    if (equippedItem != null) {
+                        g.setFont(new Font("Arial", Font.BOLD, 24));
+                        g.setColor(new Color(163, 190, 140));
+                        g.drawString(equippedItem.getName(), width / 2 - 100, y);
+                        
+                        g.setFont(new Font("Arial", Font.PLAIN, 16));
+                        g.setColor(new Color(180, 180, 180));
+                        g.drawString("← → to switch", width / 2 + 180, y + 5);
+                        
+                        // Draw item description
+                        g.setFont(new Font("Arial", Font.ITALIC, 16));
+                        g.setColor(new Color(200, 200, 150));
+                        String description = equippedItem.getDescription();
+                        g.drawString(description, width / 2 - 390, y + 28);
+                    }
+                    
+                    g.setFont(new Font("Arial", Font.PLAIN, 18));
+                    g.setColor(new Color(136, 192, 208));
+                    g.drawString(String.format("Unlocked: %d/%d", gameData.getUnlockedItems().size(), 10), width / 2 - 390, y + 50);
+                } else {
+                    g.setFont(new Font("Arial", Font.ITALIC, 20));
+                    g.setColor(new Color(150, 150, 150));
+                    g.drawString("None Unlocked - Defeat mega bosses (levels 3, 6, 9...)", width / 2 - 100, y);
+                }
+                
+                y += 100;
+                continue;
+            }
+            
             int owned = 0;
             int active = 0;
             
@@ -736,7 +793,7 @@ public class Renderer {
         }
     }
     
-    public void drawGame(Graphics2D g, int width, int height, Player player, Boss boss, List<Bullet> bullets, List<Particle> particles, List<BeamAttack> beamAttacks, int level, double time, boolean bossVulnerable, int vulnerabilityTimer, int dodgeCombo, boolean showCombo, boolean bossDeathAnimation, double bossDeathScale, double bossDeathRotation, double gameTime, int fps) {
+    public void drawGame(Graphics2D g, int width, int height, Player player, Boss boss, List<Bullet> bullets, List<Particle> particles, List<BeamAttack> beamAttacks, int level, double time, boolean bossVulnerable, int vulnerabilityTimer, int dodgeCombo, boolean showCombo, boolean bossDeathAnimation, double bossDeathScale, double bossDeathRotation, double gameTime, int fps, boolean shieldActive, boolean playerInvincible, int bossHitCount, double cameraX, double cameraY) {
         // Draw background based on mode setting
         if (Game.backgroundMode == 0) {
             // Gradient mode
@@ -764,9 +821,38 @@ public class Renderer {
             applyChromaticAberration(g, width, height);
         }
         
-        // Draw beam attacks (behind everything else)
-        for (BeamAttack beam : beamAttacks) {
-            beam.draw(g, width, height);
+        // Save the original transform and apply camera offset to all game objects
+        AffineTransform originalTransform = g.getTransform();
+        g.translate(-cameraX, -cameraY);
+        
+        // Draw beam attacks (behind everything else) - use snapshot to avoid ConcurrentModificationException
+        java.util.List<BeamAttack> beamSnapshot = new java.util.ArrayList<>(beamAttacks);
+        for (BeamAttack beam : beamSnapshot) {
+            if (beam != null) {
+                beam.draw(g, width, height);
+            }
+        }
+        
+        // Draw laser beam from active item
+        ActiveItem equippedItem = gameData.getEquippedItem();
+        if (player != null && equippedItem != null && equippedItem.isActive() && 
+            equippedItem.getType() == ActiveItem.ItemType.LASER_BEAM) {
+            double laserX = player.getX();
+            double laserWidth = 40;
+            double laserY = 0; // Beam goes to top of screen
+            double laserHeight = player.getY();
+            
+            // Outer glow
+            g.setColor(new Color(235, 203, 139, 50));
+            g.fillRect((int)(laserX - laserWidth), (int)laserY, (int)(laserWidth * 2), (int)laserHeight);
+            
+            // Inner beam
+            g.setColor(new Color(235, 203, 139, 150));
+            g.fillRect((int)(laserX - laserWidth / 2), (int)laserY, (int)laserWidth, (int)laserHeight);
+            
+            // Core
+            g.setColor(new Color(255, 255, 200, 200));
+            g.fillRect((int)(laserX - laserWidth / 4), (int)laserY, (int)(laserWidth / 2), (int)laserHeight);
         }
         
         // Draw particles (behind sprites) - use snapshot to avoid ConcurrentModificationException
@@ -780,6 +866,42 @@ public class Renderer {
         // Draw player (only if not in death animation)
         if (player != null) {
             player.draw(g);
+            
+            // Draw shield if active
+            if (shieldActive) {
+                int shieldRadius = 35;
+                int pulseOffset = (int)(Math.sin(time * 0.1) * 3);
+                
+                // Outer shield glow
+                g.setColor(new Color(136, 192, 208, 50));
+                g.fillOval((int)player.getX() - shieldRadius - pulseOffset, 
+                          (int)player.getY() - shieldRadius - pulseOffset, 
+                          (shieldRadius + pulseOffset) * 2, (shieldRadius + pulseOffset) * 2);
+                
+                // Inner shield
+                g.setColor(new Color(136, 192, 208, 100));
+                g.setStroke(new BasicStroke(3));
+                g.drawOval((int)player.getX() - shieldRadius, 
+                          (int)player.getY() - shieldRadius, 
+                          shieldRadius * 2, shieldRadius * 2);
+            }
+            
+            // Draw invincibility glow
+            if (playerInvincible) {
+                int glowRadius = 40;
+                int pulseSize = (int)(Math.sin(time * 0.15) * 5);
+                
+                // Pulsing gold glow
+                g.setColor(new Color(235, 203, 139, 80));
+                g.fillOval((int)player.getX() - glowRadius - pulseSize, 
+                          (int)player.getY() - glowRadius - pulseSize, 
+                          (glowRadius + pulseSize) * 2, (glowRadius + pulseSize) * 2);
+                
+                g.setColor(new Color(255, 255, 200, 120));
+                g.fillOval((int)player.getX() - glowRadius / 2, 
+                          (int)player.getY() - glowRadius / 2, 
+                          glowRadius, glowRadius);
+            }
         }
         
         // Draw boss with special handling during death animation
@@ -830,8 +952,9 @@ public class Renderer {
             }
         }
         
-        // Draw bullets
-        for (Bullet bullet : bullets) {
+        // Draw bullets (use snapshot to prevent ConcurrentModificationException)
+        List<Bullet> bulletsSnapshot = new ArrayList<>(bullets);
+        for (Bullet bullet : bulletsSnapshot) {
             bullet.draw(g);
         }
         
@@ -844,8 +967,13 @@ public class Renderer {
         if (boss != null) {
             int barWidth = 600;
             int barHeight = 40;
-            int barX = (width - barWidth) / 2;
-            int barY = height - 110;
+            
+            // Apply parallax effect - boss bar moves less with camera (30% of camera movement)
+            int parallaxOffsetX = (int)(cameraX * 0.3);
+            int parallaxOffsetY = (int)(cameraY * 0.3);
+            
+            int barX = (width - barWidth) / 2 + parallaxOffsetX;
+            int barY = height - 110 + parallaxOffsetY;
             
             // Boss name and type
             String bossName = boss.getVehicleName();
@@ -890,6 +1018,27 @@ public class Renderer {
             g.setPaint(healthGradient);
             g.fillRoundRect(barX + 10, barY + 45, barWidth - 20, 15, 8, 8);
             
+            // Add hit indicators based on boss type (2 segments for mini, 3 for mega)
+            int maxHits = boss.isMegaBoss() ? 3 : 2;
+            g.setColor(new Color(0, 0, 0, 150));
+            int segmentWidth = (barWidth - 20) / maxHits;
+            for (int i = 1; i < maxHits; i++) {
+                int dividerX = barX + 10 + (segmentWidth * i);
+                g.fillRect(dividerX - 1, barY + 45, 2, 15);
+            }
+            
+            // Darken segments that have been hit
+            g.setColor(new Color(0, 0, 0, 120));
+            for (int i = 0; i < bossHitCount && i < maxHits; i++) {
+                g.fillRoundRect(barX + 10 + (segmentWidth * i), barY + 45, segmentWidth, 15, 8, 8);
+            }
+            
+            // Draw hit count text
+            g.setFont(new Font("Arial", Font.BOLD, 12));
+            g.setColor(Color.WHITE);
+            String hitText = "Hits: " + bossHitCount + "/" + maxHits;
+            g.drawString(hitText, barX + barWidth - 70, barY + 57);
+            
             // Vulnerability indicator
             if (bossVulnerable) {
                 // Calculate color based on time remaining (green -> yellow -> red)
@@ -918,6 +1067,9 @@ public class Renderer {
             g.setStroke(new BasicStroke(2));
             g.drawRoundRect(barX + 10, barY + 45, barWidth - 20, 15, 8, 8);
         }
+        
+        // Restore original transform for UI elements (they should not be affected by camera)
+        g.setTransform(originalTransform);
         
         // Draw UI with better contrast
         g.setColor(new Color(0, 0, 0, 150));
@@ -948,6 +1100,52 @@ public class Renderer {
             String comboText = "COMBO x" + dodgeCombo;
             FontMetrics comboFm = g.getFontMetrics();
             g.drawString(comboText, width - 205 + (190 - comboFm.stringWidth(comboText)) / 2, 50);
+        }
+        
+        // Draw active item UI
+        equippedItem = gameData.getEquippedItem();
+        if (equippedItem != null) {
+            int itemUIX = width - 210;
+            int itemUIY = showCombo && dodgeCombo > 1 ? 80 : 10;
+            
+            // Background
+            g.setColor(new Color(0, 0, 0, 150));
+            g.fillRoundRect(itemUIX, itemUIY, 200, 80, 10, 10);
+            
+            // Item name
+            g.setFont(new Font("Arial", Font.BOLD, 20));
+            if (equippedItem.canActivate()) {
+                g.setColor(new Color(163, 190, 140)); // Green when ready
+            } else if (equippedItem.isActive()) {
+                g.setColor(new Color(235, 203, 139)); // Yellow when active
+            } else {
+                g.setColor(new Color(150, 150, 150)); // Gray when on cooldown
+            }
+            g.drawString(equippedItem.getName(), itemUIX + 10, itemUIY + 25);
+            
+            // Cooldown bar
+            g.setColor(new Color(60, 60, 60));
+            g.fillRect(itemUIX + 10, itemUIY + 35, 180, 15);
+            
+            if (equippedItem.isActive()) {
+                // Active duration bar (yellow)
+                float activePercent = (float)equippedItem.getActiveTimer() / (float)equippedItem.getActiveDuration();
+                g.setColor(new Color(235, 203, 139));
+                g.fillRect(itemUIX + 10, itemUIY + 35, (int)(180 * activePercent), 15);
+            } else {
+                // Cooldown progress bar (green)
+                float cooldownPercent = equippedItem.getCooldownPercent();
+                g.setColor(new Color(163, 190, 140));
+                g.fillRect(itemUIX + 10, itemUIY + 35, (int)(180 * cooldownPercent), 15);
+            }
+            
+            // Key hint
+            g.setFont(new Font("Arial", Font.PLAIN, 14));
+            g.setColor(Color.WHITE);
+            String keyHint = equippedItem.canActivate() ? "Press [SPACE]" : 
+                           equippedItem.isActive() ? "ACTIVE" :
+                           String.format("%.1fs", equippedItem.getCurrentCooldown() / 60.0);
+            g.drawString(keyHint, itemUIX + 10, itemUIY + 68);
         }
         
         // Apply vignette effect at the end (darkens edges)
@@ -1191,7 +1389,8 @@ public class Renderer {
             "[2] Give $10,000",
             "[3] Max All Upgrades",
             "[4] Give $1,000",
-            "[5] Give $100"
+            "[5] Give $100",
+            "[6] Unlock All Active Items"
         };
         
         Color[] colors = {
@@ -1199,7 +1398,8 @@ public class Renderer {
             new Color(0, 255, 127),  // Spring green
             new Color(138, 43, 226), // Blue violet
             new Color(255, 165, 0),  // Orange
-            new Color(135, 206, 250) // Light sky blue
+            new Color(135, 206, 250), // Light sky blue
+            new Color(163, 190, 140) // Green for active items
         };
         
         for (int i = 0; i < options.length; i++) {

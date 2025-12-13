@@ -31,7 +31,7 @@ public class Bullet {
     private static final double TWO_PI = Math.PI * 2;
     private static final double HALF_PI = Math.PI / 2;
     private int warningTime;
-    private static final int WARNING_DURATION = 45; // Frames before bullet activates
+    private static final int WARNING_DURATION = 120; // Frames before bullet activates
     private double age; // Frames since activation
     private double spiralAngle; // For spiral bullets
     private boolean hasSplit; // For splitting bullets
@@ -354,74 +354,74 @@ public class Bullet {
     public void draw(Graphics2D g) {
         // Draw warning indicator during warning phase
         if (warningTime > 0) {
-            float alpha = (float)(warningTime % 20) / 20.0f;
-            g.setColor(new Color(191, 97, 106, (int)(alpha * 180))); // Palette red
-            int warningSize = 20 + (WARNING_DURATION - warningTime) / 3;
+            float alpha = Math.min(0.5f, (float)(warningTime % 20) / 20.0f + 0.2f);
+            g.setColor(new Color(180, 40, 40, (int)(alpha * 180))); // Dim red with transparency
+            int warningSize = 8 + (WARNING_DURATION - warningTime) / 6;
             
             // Draw crosshair warning
-            g.setStroke(new BasicStroke(3));
+            g.setStroke(new BasicStroke(2));
             g.drawLine((int)x - warningSize, (int)y, (int)x + warningSize, (int)y);
             g.drawLine((int)x, (int)y - warningSize, (int)x, (int)y + warningSize);
             
             // Draw warning circle
-            g.setStroke(new BasicStroke(2));
+            g.setStroke(new BasicStroke(1.5f));
             g.drawOval((int)x - warningSize/2, (int)y - warningSize/2, warningSize, warningSize);
             return;
         }
         
         // Get sprite index and size based on type
         int spriteIndex = 0;
-        int spriteSize = SIZE * 3;
+        int spriteSize = SIZE * 4;
         
         switch (type) {
             case NORMAL:
                 spriteIndex = 0;
-                spriteSize = SIZE * 3;
+                spriteSize = SIZE * 4;
                 break;
             case FAST:
                 spriteIndex = 1;
-                spriteSize = SIZE * 2;
+                spriteSize = SIZE * 3;
                 break;
             case LARGE:
                 spriteIndex = 2;
-                spriteSize = SIZE * 4;
+                spriteSize = SIZE * 5;
                 break;
             case HOMING:
                 spriteIndex = 3;
-                spriteSize = SIZE * 3;
+                spriteSize = SIZE * 4;
                 break;
             case BOUNCING:
                 spriteIndex = 4;
-                spriteSize = SIZE * 3;
+                spriteSize = SIZE * 4;
                 break;
             case SPIRAL:
                 spriteIndex = 5;
-                spriteSize = SIZE * 3;
+                spriteSize = SIZE * 4;
                 break;
             case SPLITTING:
                 spriteIndex = 6;
-                spriteSize = SIZE * 4;
+                spriteSize = SIZE * 5;
                 break;
             case ACCELERATING:
             case WAVE:
                 spriteIndex = 7;
-                spriteSize = SIZE * 3;
+                spriteSize = SIZE * 4;
                 break;
             case BOMB:
                 spriteIndex = 8 + (spriteVariant % 2); // Bomb 1 or Bomb 2
-                spriteSize = SIZE * 5;
+                spriteSize = SIZE * 6;
                 break;
             case GRENADE:
                 spriteIndex = 10 + (spriteVariant % 3); // Grenade 1, 2, or 3
-                spriteSize = SIZE * 4;
+                spriteSize = SIZE * 5;
                 break;
             case NUKE:
                 spriteIndex = 13; // Mini Nuke
-                spriteSize = SIZE * 6;
+                spriteSize = SIZE * 7;
                 break;
             case FRAGMENT:
                 spriteIndex = 14 + spriteVariant; // Fragment Proj 1 or 2
-                spriteSize = SIZE * 2;
+                spriteSize = SIZE * 3;
                 break;
         }
         
@@ -583,9 +583,9 @@ public class Bullet {
         double dx = x - player.getX();
         double dy = y - player.getY();
         double distance = Math.sqrt(dx * dx + dy * dy);
-        // Larger, more fitting hitbox (70% of sprite size)
+        // Smaller hitbox (30% of sprite size)
         int actualSize = (type == BulletType.LARGE) ? SIZE + 4 : (type == BulletType.FAST) ? SIZE - 2 : SIZE;
-        return distance < (actualSize * 0.7) + (player.getSize() * 0.7);
+        return distance < (actualSize * 0.5) + (player.getSize() * 0.3);
     }
     
     public boolean shouldSplit() {
@@ -603,5 +603,11 @@ public class Bullet {
     
     public boolean isActive() {
         return warningTime <= 0;
+    }
+    
+    // Apply force to bullet (used by active items like SHOCKWAVE, MAGNET)
+    public void applyForce(double fx, double fy) {
+        vx += fx;
+        vy += fy;
     }
 }

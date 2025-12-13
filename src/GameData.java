@@ -26,6 +26,11 @@ public class GameData {
     private int activeLuckyDodgeLevel;
     private int activeAttackWindowLevel;
     
+    // Active Items system
+    private java.util.List<ActiveItem.ItemType> unlockedItems;
+    private ActiveItem equippedItem;
+    private int equippedItemIndex; // Index in unlocked items list
+    
     public GameData() {
         score = 0;
         totalMoney = 0;
@@ -42,6 +47,11 @@ public class GameData {
         activeBulletSlowLevel = 0;
         activeLuckyDodgeLevel = 0;
         activeAttackWindowLevel = 0;
+        
+        // Initialize active items
+        unlockedItems = new java.util.ArrayList<>();
+        equippedItem = null;
+        equippedItemIndex = -1;
     }
     
     // Getters and setters
@@ -136,9 +146,50 @@ public class GameData {
         bulletSlowUpgradeLevel = 10;
         luckyDodgeUpgradeLevel = 10;
         attackWindowUpgradeLevel = 10;
-        activeSpeedLevel = 10;
-        activeBulletSlowLevel = 10;
-        activeLuckyDodgeLevel = 10;
-        activeAttackWindowLevel = 10;
     }
+    
+    // Active Items methods
+    public void unlockNextItem() {
+        ActiveItem.ItemType[] allItems = ActiveItem.ItemType.values();
+        if (unlockedItems.size() < allItems.length) {
+            unlockedItems.add(allItems[unlockedItems.size()]);
+        }
+    }
+    
+    public void unlockAllItems() {
+        unlockedItems.clear();
+        for (ActiveItem.ItemType type : ActiveItem.ItemType.values()) {
+            unlockedItems.add(type);
+        }
+        if (!unlockedItems.isEmpty() && equippedItem == null) {
+            equipItem(0);
+        }
+    }
+    
+    public void equipItem(int index) {
+        if (index >= 0 && index < unlockedItems.size()) {
+            equippedItemIndex = index;
+            equippedItem = new ActiveItem(unlockedItems.get(index));
+        }
+    }
+    
+    public void equipNextItem() {
+        if (!unlockedItems.isEmpty()) {
+            equippedItemIndex = (equippedItemIndex + 1) % unlockedItems.size();
+            equippedItem = new ActiveItem(unlockedItems.get(equippedItemIndex));
+        }
+    }
+    
+    public void equipPreviousItem() {
+        if (!unlockedItems.isEmpty()) {
+            equippedItemIndex--;
+            if (equippedItemIndex < 0) equippedItemIndex = unlockedItems.size() - 1;
+            equippedItem = new ActiveItem(unlockedItems.get(equippedItemIndex));
+        }
+    }
+    
+    public ActiveItem getEquippedItem() { return equippedItem; }
+    public java.util.List<ActiveItem.ItemType> getUnlockedItems() { return unlockedItems; }
+    public int getEquippedItemIndex() { return equippedItemIndex; }
+    public boolean hasActiveItems() { return !unlockedItems.isEmpty(); }
 }
