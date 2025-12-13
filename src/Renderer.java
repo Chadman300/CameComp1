@@ -769,9 +769,12 @@ public class Renderer {
             beam.draw(g, width, height);
         }
         
-        // Draw particles (behind sprites)
-        for (Particle particle : particles) {
-            particle.draw(g);
+        // Draw particles (behind sprites) - use snapshot to avoid ConcurrentModificationException
+        java.util.List<Particle> particleSnapshot = new java.util.ArrayList<>(particles);
+        for (Particle particle : particleSnapshot) {
+            if (particle != null && particle.isAlive()) {
+                particle.draw(g);
+            }
         }
         
         // Draw player (only if not in death animation)
@@ -835,11 +838,6 @@ public class Renderer {
         // Apply bloom/glow effect on bright objects
         if (Game.enableBloom) {
             applyBloom(g, player, boss, bullets, particles, bossVulnerable);
-        }
-        
-        // Apply motion blur on fast-moving objects
-        if (Game.enableMotionBlur && player != null) {
-            applyMotionBlur(g, player);
         }
         
         // Draw boss health bar at bottom
@@ -1081,7 +1079,7 @@ public class Renderer {
         g.drawString(inst, (width - fm.stringWidth(inst)) / 2, height / 2 + 130);
     }
     
-    public void drawSettings(Graphics2D g, int width, int height, int selectedItem, double time) {
+    public void drawSettings(Graphics2D g, int width, int height, int selectedItem, double time, double scrollOffset) {
         // Draw animated gradient with palette colors
         drawAnimatedGradient(g, width, height, time, new Color[]{new Color(46, 52, 64), new Color(59, 66, 82), new Color(76, 86, 106)});
         
@@ -1093,9 +1091,13 @@ public class Renderer {
         
         g.setFont(new Font("Arial", Font.PLAIN, 18));
         g.setColor(new Color(216, 222, 233));
-        String subtitle = "Use UP/DOWN to navigate | SPACE or arrows to toggle";
+        String subtitle = "Use UP/DOWN to navigate | SPACE or arrows to toggle | Mouse wheel to scroll";
         fm = g.getFontMetrics();
         g.drawString(subtitle, (width - fm.stringWidth(subtitle)) / 2, 120);
+        
+        // Create clipping region for scrollable area
+        Shape oldClip = g.getClip();
+        g.setClip(0, 160, width, height - 220);
         
         // Settings items
         String[] settingNames = {"Background Mode", "Gradient Animation", "Gradient Quality", "Grain Effect", "Particle Effects", "Shadows", "Bloom/Glow", "Motion Blur", "Chromatic Aberration", "Vignette"};
@@ -1125,8 +1127,14 @@ public class Renderer {
             "Darken screen edges (focuses attention on center)"
         };
         
-        int y = 200;
+        int y = 200 - (int)scrollOffset;
         for (int i = 0; i < settingNames.length; i++) {
+            // Skip rendering if outside visible area
+            if (y < 140 || y > height - 80) {
+                y += 150;
+                continue;
+            }
+            
             // Build button text
             String buttonText = settingNames[i] + ": " + settingValues[i];
             settingsButtons[i] = new UIButton(buttonText, 0, 0, 700, 80, new Color(76, 86, 106), new Color(235, 203, 139));
@@ -1145,6 +1153,9 @@ public class Renderer {
             
             y += 150;
         }
+        
+        // Restore clipping
+        g.setClip(oldClip);
         
         // Instructions
         g.setColor(new Color(216, 222, 233));
@@ -1642,20 +1653,20 @@ public class Renderer {
         // Create radial gradient from center
         int centerX = width / 2;
         int centerY = height / 2;
-        int radius = (int)Math.sqrt(centerX * centerX + centerY * centerY);
+        int radius = (int)Math.sqrt(centerX * centerX + centerY * centerY) * 3;
         
         // Draw multiple layers for smooth gradient
         for (int i = 0; i < 4; i++) {
-            float alpha = 0.12f * (i + 1);
+            float alpha = Math.min(1.0f, 0.36f * (i + 1)); // Cap at 1.0f to avoid exceeding range
             int innerRadius = radius - (radius / 4) * (4 - i);
             int outerRadius = radius;
             
             g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
             
-            // Draw darkened edges
+            // Draw darkened edges - starts darkening much earlier (0.2 instead of 0.4)
             RadialGradientPaint gradient = new RadialGradientPaint(
                 centerX, centerY, outerRadius,
-                new float[]{0.0f, 0.6f, 1.0f},
+                new float[]{0.0f, 0.2f, 1.0f},
                 new Color[]{new Color(0, 0, 0, 0), new Color(0, 0, 0, 0), new Color(0, 0, 0, 255)}
             );
             g.setPaint(gradient);

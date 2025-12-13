@@ -26,6 +26,7 @@ public class Game extends JPanel implements Runnable {
     private int selectedStatItem;
     private int selectedMenuItem; // For main menu navigation
     private double levelSelectScroll; // Scroll offset for level select
+    private double settingsScroll; // Scroll offset for settings menu
     
     // Core systems
     private GameData gameData;
@@ -105,7 +106,7 @@ public class Game extends JPanel implements Runnable {
     public static boolean enableShadows = true;
     public static boolean enableBloom = true;
     public static boolean enableMotionBlur = false;
-    public static boolean enableChromaticAberration = false;
+    public static boolean enableChromaticAberration = true;
     public static boolean enableVignette = true;
     public static int gradientQuality = 1; // 0=Low (1 layer), 1=Medium (2 layers), 2=High (3 layers)
     public static int backgroundMode = 1; // 0=Gradient, 1=Parallax Images, 2=Static Image
@@ -148,6 +149,7 @@ public class Game extends JPanel implements Runnable {
         gameState = GameState.LOADING;
         selectedStatItem = 0;
         selectedMenuItem = 0;
+        settingsScroll = 0;
         selectedSettingsItem = 0;
         gradientTime = 0;
         screenShakeX = 0;
@@ -232,8 +234,16 @@ public class Game extends JPanel implements Runnable {
                 break;
                 
             case SETTINGS:
-                if (key == KeyEvent.VK_UP || key == KeyEvent.VK_W) { selectedSettingsItem = Math.max(0, selectedSettingsItem - 1); screenShakeIntensity = 1; }
-                else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_S) { selectedSettingsItem = Math.min(9, selectedSettingsItem + 1); screenShakeIntensity = 1; }
+                if (key == KeyEvent.VK_UP || key == KeyEvent.VK_W) { 
+                    selectedSettingsItem = Math.max(0, selectedSettingsItem - 1); 
+                    ensureSettingsItemVisible();
+                    screenShakeIntensity = 1; 
+                }
+                else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_S) { 
+                    selectedSettingsItem = Math.min(9, selectedSettingsItem + 1); 
+                    ensureSettingsItemVisible();
+                    screenShakeIntensity = 1; 
+                }
                 else if (key == KeyEvent.VK_LEFT || key == KeyEvent.VK_A || key == KeyEvent.VK_RIGHT || key == KeyEvent.VK_D) {
                     toggleSetting(selectedSettingsItem);
                     screenShakeIntensity = 3;
@@ -381,6 +391,20 @@ public class Game extends JPanel implements Runnable {
         // If level is below visible area, scroll down
         else if (levelY > HEIGHT - 200) {
             levelSelectScroll = 200 + row * 150 - (HEIGHT - 350);
+        }
+    }
+    
+    private void ensureSettingsItemVisible() {
+        // Auto-scroll to keep selected setting visible
+        int itemY = 200 + selectedSettingsItem * 150 - (int)settingsScroll;
+        
+        // If item is above visible area, scroll up
+        if (itemY < 180) {
+            settingsScroll = Math.max(0, 200 + selectedSettingsItem * 150 - 180);
+        }
+        // If item is below visible area, scroll down
+        else if (itemY > HEIGHT - 250) {
+            settingsScroll = 200 + selectedSettingsItem * 150 - (HEIGHT - 400);
         }
     }
     
@@ -1026,7 +1050,7 @@ public class Game extends JPanel implements Runnable {
                 renderer.drawStatsUpgrades(g2d, WIDTH, selectedStatItem);
                 break;
             case SETTINGS:
-                renderer.drawSettings(g2d, WIDTH, HEIGHT, selectedSettingsItem, gradientTime);
+                renderer.drawSettings(g2d, WIDTH, HEIGHT, selectedSettingsItem, gradientTime, settingsScroll);
                 break;
             case LEVEL_SELECT:
                 renderer.drawLevelSelect(g2d, WIDTH, HEIGHT, gameData.getCurrentLevel(), gameData.getMaxUnlockedLevel(), gradientTime, levelSelectScroll);

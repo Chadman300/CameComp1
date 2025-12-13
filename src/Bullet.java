@@ -333,7 +333,7 @@ public class Bullet {
         // Number of fragments based on type
         int fragmentCount = 8;
         if (type == BulletType.NUKE) fragmentCount = 16;
-        if (type == BulletType.GRENADE) fragmentCount = 12;
+        if (type == BulletType.GRENADE) fragmentCount = 8;
         
         // Create fragments in all directions
         for (int i = 0; i < fragmentCount; i++) {

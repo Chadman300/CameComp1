@@ -76,7 +76,7 @@ public class Boss {
         this.maxPatterns = Math.min(2 + (level * 2), 15); // Cap at 15 patterns (includes explosives)
         
         this.shootTimer = 0;
-        this.shootInterval = Math.max(20, 60 - level * 5); // Faster shooting at higher levels
+        this.shootInterval = Math.max(50, 80 + level * 3); // Slower shooting, gets slightly slower at higher levels
         // Start with random pattern from available pool
         this.patternType = (int)(Math.random() * maxPatterns);
         // Start with current position as target
@@ -607,7 +607,7 @@ public class Boss {
     private void shootGrenades(List<Bullet> bullets, Player player) {
         double speedMultiplier = Math.min(1.0, 0.4 + (level * 0.12));
         double angleToPlayer = Math.atan2(player.getY() - y, player.getX() - x);
-        int numBullets = 2 + level / 4;
+        int numBullets = 1 + (level >= 5 ? 1 : 0); // Only 1-2 grenades max
         for (int i = 0; i < numBullets; i++) {
             double angle = angleToPlayer + (i - numBullets/2.0) * 0.3;
             double spawnX = x + Math.cos(angle) * size;
